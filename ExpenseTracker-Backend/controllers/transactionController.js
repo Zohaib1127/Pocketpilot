@@ -1,4 +1,5 @@
 import Transaction from "../models/Transaction.js";
+import User from "../models/User.js";
 
 // Add Transaction
 export const addTransaction = async (req, res) => {
@@ -34,6 +35,54 @@ export const addTransaction = async (req, res) => {
 
     res.status(201).json(transaction);
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 🤖 Auto-Add Transaction (From SMS Auto-Reader)
+export const autoAddTransaction = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { amount, type, title, category, source } = req.body;
+
+    if (!amount || !type) {
+      return res.status(400).json({ message: "Amount and type are required" });
+    }
+
+    // Fetch user for dynamic currency display in notification
+    const user = await User.findById(userId);
+    const currency = user?.currency || "Rs.";
+
+    const transaction = await Transaction.create({
+      user: userId,
+      title: title || "Auto SMS Transaction",
+      amount: Number(amount),
+      type: type.toLowerCase(),
+      category: category || "General",
+      date: new Date(),
+      note: `Auto-recorded via ${source || 'SMS Reader'}`,
+    });
+
+    // ⚡ Real-Time Socket Notification
+    const io = req.app.get("io");
+    if (io) {
+      const emoji = type.toLowerCase() === "income" ? "📲 📈" : "📲 📉";
+
+      io.to(userId.toString()).emit("new_notification", {
+        title: `Auto Transaction Detected ${emoji}`,
+        message: `${type.toLowerCase() === "income" ? "Received" : "Spent"} ${currency} ${amount} at "${title || 'Store'}"`,
+        data: transaction,
+        createdAt: new Date(),
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Auto transaction recorded successfully",
+      data: transaction,
+    });
+  } catch (error) {
+    console.error("Auto Add Transaction Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
