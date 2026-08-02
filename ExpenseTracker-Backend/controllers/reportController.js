@@ -1,14 +1,13 @@
 import PDFDocument from "pdfkit";
 import Transaction from "../models/Transaction.js";
 import Budget from "../models/Budget.js";
-import User from "../models/User.js"; // ✅ Import User model
+import User from "../models/User.js";
 
 const MONTH_NAMES = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
-// Map currency code/symbol to clean PDF string
 const getCurrencySymbol = (userCurrency) => {
   if (!userCurrency) return "Rs.";
   
@@ -32,7 +31,7 @@ const getCurrencySymbol = (userCurrency) => {
     case "RS.":
       return "Rs.";
     default:
-      return userCurrency; // Fallback to provided string
+      return userCurrency;
   }
 };
 
@@ -40,11 +39,9 @@ export const generateReport = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 🗓️ Fetch User Currency Preference
     const userDoc = await User.findById(userId);
     const currencySymbol = getCurrencySymbol(userDoc?.currency || req.user?.currency);
 
-    // 🗓️ Extract Start & End Period Params
     let { startMonth, startYear, endMonth, endYear } = req.query;
 
     const sMonth = startMonth ? parseInt(startMonth, 10) : new Date().getMonth() + 1;
@@ -52,13 +49,11 @@ export const generateReport = async (req, res) => {
     const eMonth = endMonth ? parseInt(endMonth, 10) : sMonth;
     const eYear = endYear ? parseInt(endYear, 10) : sYear;
 
-    // Period Start & End Dates
     const startDate = new Date(sYear, sMonth - 1, 1);
     const endDate = new Date(eYear, eMonth, 0, 23, 59, 59, 999);
 
     const periodLabel = `${MONTH_NAMES[sMonth - 1]} ${sYear} - ${MONTH_NAMES[eMonth - 1]} ${eYear}`;
 
-    // Fetch transactions & budget within selected range
     const transactions = await Transaction.find({
       user: userId,
       date: { $gte: startDate, $lte: endDate },
@@ -80,17 +75,17 @@ export const generateReport = async (req, res) => {
     const savings = totalIncome - totalExpense;
     const monthlyBudget = userBudget?.amount || 0;
 
-    // ⚡ Socket Notification Emit
+    // ⚡ Socket Notification Emit (With Type)
     const io = req.app.get("io");
     if (io) {
       io.to(userId.toString()).emit("new_notification", {
         title: "Report Downloaded 📄",
         message: `Your report for (${periodLabel}) has been generated successfully.`,
+        type: "info", // 👈 Added Type
         createdAt: new Date(),
       });
     }
 
-    // Setup PDF
     const doc = new PDFDocument({ margin: 40, size: "A4", bufferPages: true });
 
     res.setHeader("Content-Type", "application/pdf");
@@ -101,7 +96,6 @@ export const generateReport = async (req, res) => {
 
     doc.pipe(res);
 
-    // Color Palette
     const PRIMARY_COLOR = "#4F46E5";
     const SECONDARY_BG = "#EEF2FF";
     const TEXT_MAIN = "#0F172A";
@@ -112,7 +106,6 @@ export const generateReport = async (req, res) => {
     const CARD_BG = "#F8FAFC";
     const BORDER_COLOR = "#E2E8F0";
 
-    // Header
     doc.rect(0, 0, 595.28, 12).fill(PRIMARY_COLOR);
 
     doc
@@ -152,7 +145,6 @@ export const generateReport = async (req, res) => {
       .lineWidth(1)
       .stroke();
 
-    // User Profile
     doc
       .fontSize(11)
       .font("Helvetica-Bold")
@@ -174,7 +166,6 @@ export const generateReport = async (req, res) => {
       .fillColor(TEXT_MAIN)
       .text(req.user?.email || "N/A");
 
-    // Dynamic Metric Cards Grid (Using Dynamic Currency Symbol)
     const cardY = 135;
     const cardWidth = 118;
     const cardHeight = 52;
@@ -209,7 +200,6 @@ export const generateReport = async (req, res) => {
         .text(m.value, x + 10, cardY + 26);
     });
 
-    // Table Header
     const drawTableHeader = (y) => {
       doc.rect(40, y, 515, 22).fill(SECONDARY_BG);
       doc.fillColor(PRIMARY_COLOR).fontSize(8.5).font("Helvetica-Bold");
@@ -290,7 +280,6 @@ export const generateReport = async (req, res) => {
       });
     }
 
-    // Dynamic Footer
     const range = doc.bufferedPageRange();
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);

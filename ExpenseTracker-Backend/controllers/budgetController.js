@@ -30,7 +30,7 @@ export const setBudget = async (req, res) => {
       });
     }
 
-    // ⚡ Socket Notification Emit (Targeted User Room Only)
+    // ⚡ Socket Notification Emit
     const io = req.app.get("io");
     if (io) {
       const userId = req.user._id.toString();
@@ -38,6 +38,7 @@ export const setBudget = async (req, res) => {
       io.to(userId).emit("new_notification", {
         title: isUpdated ? "Budget Updated 🎯" : "Budget Set 🎯",
         message: `Your monthly budget for ${month}/${year} has been set to Rs. ${amount.toLocaleString()}`,
+        type: "success", // 👈 Added Type
         data: budget,
       });
     }

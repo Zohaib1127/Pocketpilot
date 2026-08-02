@@ -1,21 +1,16 @@
 import Transaction from "../models/Transaction.js";
 
-// Safe Payment Method Normalizer
 const normalizePaymentMethod = (rawMode, fallback = "cash") => {
   if (!rawMode) return fallback;
 
   let cleanMode = String(rawMode).toLowerCase().trim();
-
-  // Clean special characters like spaces, dashes, underscores for robust matching
   cleanMode = cleanMode.replace(/[\s\-_]+/g, "");
 
-  // Exact matches
   if (cleanMode === "cash") return "cash";
   if (cleanMode === "creditcard") return "credit_card";
   if (cleanMode === "debitcard") return "debit_card";
   if (cleanMode === "banktransfer" || cleanMode === "bank") return "bank_transfer";
 
-  // Keyword matching
   if (cleanMode.includes("debit")) return "debit_card";
   if (cleanMode.includes("credit")) return "credit_card";
   if (
@@ -54,7 +49,6 @@ export const addTransaction = async (req, res) => {
       });
     }
 
-    // Extract mode safely from any possible payload key
     const rawMode = paymentMethod || paymentMode || payment_method;
     const finalPaymentMethod = normalizePaymentMethod(rawMode, "cash");
 
@@ -70,10 +64,13 @@ export const addTransaction = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      const emoji = type.toLowerCase() === "income" ? "📈" : "📉";
+      const isIncome = type.toLowerCase() === "income";
+      const emoji = isIncome ? "📈" : "📉";
+      
       io.to(req.user._id.toString()).emit("new_notification", {
         title: `Transaction Added ${emoji}`,
-        message: `${type.toLowerCase() === "income" ? "Received" : "Spent"} ${amount} for "${title}"`,
+        message: `${isIncome ? "Received" : "Spent"} ${amount} for "${title}"`,
+        type: isIncome ? "success" : "warning", // 👈 Dynamic Success/Warning Type
         data: transaction,
       });
     }
@@ -108,7 +105,7 @@ export const getTransactions = async (req, res) => {
   }
 };
 
-// Update Transaction (FIXED ISSUE HERE)
+// Update Transaction
 export const updateTransaction = async (req, res) => {
   try {
     const transaction = await Transaction.findById(req.params.id);
@@ -126,14 +123,12 @@ export const updateTransaction = async (req, res) => {
     transaction.type = req.body.type ? req.body.type.toLowerCase() : transaction.type;
     transaction.category = req.body.category || transaction.category;
 
-    // FIX: Checked all key variations safely
     const rawMode =
       req.body.paymentMethod ||
       req.body.paymentMode ||
       req.body.payment_method ||
       req.body.payment_mode;
 
-    // Always update paymentMethod using normalized value or existing fallback
     transaction.paymentMethod = normalizePaymentMethod(
       rawMode,
       transaction.paymentMethod || "cash"
@@ -149,6 +144,7 @@ export const updateTransaction = async (req, res) => {
       io.to(userId).emit("new_notification", {
         title: "Transaction Updated ✏️",
         message: `"${updatedTransaction.title}" has been updated.`,
+        type: "success", // 👈 Added Type
         data: updatedTransaction,
       });
     }

@@ -24,7 +24,7 @@ export const updateProfile = async (req, res) => {
 
     await user.save();
 
-    // ⚡ Socket Notification Emit (Targeted User Room Only)
+    // ⚡ Socket Notification Emit
     const io = req.app.get("io");
     if (io) {
       const userId = req.user._id.toString();
@@ -34,6 +34,7 @@ export const updateProfile = async (req, res) => {
         message: password
           ? "Your profile details and password have been updated."
           : "Your profile details have been updated.",
+        type: "success", // 👈 Added Type
         data: { name: user.name, email: user.email },
       });
     }

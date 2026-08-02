@@ -1,16 +1,10 @@
 import dotenv from "dotenv";
-dotenv.config(); // ⚡ Top-level env load guarantee
+dotenv.config();
 
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 
-/**
- * 🔐 Password Validation Helper Rule:
- * - Minimum 8 characters long
- * - At least 1 Uppercase letter (A-Z)
- * - At least 1 Special character (@$!%*?& etc.)
- */
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
   const hasCapital = /[A-Z]/.test(password);
@@ -24,7 +18,6 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // Check required fields
     if (!name || !email || !password) {
       return res.status(400).json({
         message: "Please fill all fields",
@@ -33,7 +26,6 @@ export const registerUser = async (req, res) => {
 
     const cleanEmail = email.toString().trim().toLowerCase();
 
-    // Enforce Password Security Rule
     if (!validatePasswordRule(password)) {
       return res.status(400).json({
         message:
@@ -149,6 +141,7 @@ export const uploadProfilePicture = async (req, res) => {
       io.to(userId).emit("new_notification", {
         title: "Profile Updated 👤",
         message: "Your profile picture has been updated successfully.",
+        type: "success", // 👈 Added Type
         data: { avatar: user.avatar },
       });
     }
@@ -164,7 +157,7 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password (Generates 6-Digit OTP & Sends Email)
+// 5. Forgot Password
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -182,17 +175,12 @@ export const forgotPassword = async (req, res) => {
         .json({ message: "User not found with this email" });
     }
 
-    // Generate random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Save OTP & expiry (10 minutes valid) in user document
     user.resetOtp = otp;
     user.resetOtpExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    console.log(`🔑 DEBUG OTP generated for ${cleanEmail}:`, otp);
-
-    // Dynamic Transporter Setup inside function
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -201,7 +189,6 @@ export const forgotPassword = async (req, res) => {
       },
     });
 
-    // Send Email via Nodemailer
     const mailOptions = {
       from: `"PocketPilot" <${process.env.EMAIL_USER}>`,
       to: user.email,
@@ -235,7 +222,7 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// 6. Reset Password (Verifies OTP & Updates Password)
+// 6. Reset Password
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -247,7 +234,6 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Please fill all fields" });
     }
 
-    // Enforce Password Security Rule on Reset
     if (!validatePasswordRule(newPassword)) {
       return res.status(400).json({
         message:
@@ -255,49 +241,33 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    console.log(
-      `\n🔍 VERIFYING OTP -> Email: "${cleanEmail}" | OTP Input: "${cleanOtp}"`
-    );
-
-    // Step 1: Find user
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      console.log("❌ Reset Failed: User not found");
       return res
         .status(404)
         .json({ message: "User not found with this email" });
     }
 
-    console.log(
-      `💾 DB Stored OTP: "${user.resetOtp}" | Expiry: ${user.resetOtpExpire}`
-    );
-
-    // Step 2: Validate OTP
     if (!user.resetOtp || user.resetOtp !== cleanOtp) {
-      console.log("❌ Reset Failed: OTP mismatch");
       return res.status(400).json({ message: "Invalid OTP code" });
     }
 
-    // Step 3: Validate Expiry
     if (
       !user.resetOtpExpire ||
       Date.now() > new Date(user.resetOtpExpire).getTime()
     ) {
-      console.log("⏰ Reset Failed: OTP expired");
       return res
         .status(400)
         .json({ message: "OTP has expired. Please request a new one." });
     }
 
-    // Step 4: Save new password and clear OTP fields
     user.password = newPassword;
     user.resetOtp = undefined;
     user.resetOtpExpire = undefined;
 
     await user.save();
 
-    console.log("✅ Password reset successfully!");
     res.status(200).json({ message: "Password reset successfully!" });
   } catch (error) {
     console.error("Reset Password Error:", error);
