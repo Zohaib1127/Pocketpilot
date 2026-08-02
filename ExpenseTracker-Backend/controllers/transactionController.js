@@ -1,10 +1,40 @@
 import Transaction from "../models/Transaction.js";
-import User from "../models/User.js";
+
+// Safe Payment Method Normalizer
+const normalizePaymentMethod = (rawMode, fallback = "cash") => {
+  if (!rawMode) return fallback;
+
+  let cleanMode = String(rawMode).toLowerCase().trim();
+
+  // Exact matches
+  if (cleanMode === "cash") return "cash";
+  if (cleanMode === "credit_card" || cleanMode === "creditcard") return "credit_card";
+  if (cleanMode === "debit_card" || cleanMode === "debitcard") return "debit_card";
+  if (cleanMode === "bank_transfer" || cleanMode === "banktransfer") return "bank_transfer";
+
+  // Keyword matching
+  if (cleanMode.includes("debit")) return "debit_card";
+  if (cleanMode.includes("credit")) return "credit_card";
+  if (
+    cleanMode.includes("bank") ||
+    cleanMode.includes("transfer") ||
+    cleanMode.includes("online") ||
+    cleanMode.includes("upi") ||
+    cleanMode.includes("neft") ||
+    cleanMode.includes("imps") ||
+    cleanMode.includes("rtgs")
+  ) {
+    return "bank_transfer";
+  }
+  if (cleanMode.includes("cash")) return "cash";
+
+  return fallback;
+};
 
 // Add Transaction
 export const addTransaction = async (req, res) => {
   try {
-    const { title, amount, type, category, date } = req.body;
+    const { title, amount, type, category, paymentMethod, paymentMode, date } = req.body;
 
     if (!title || !amount || !type || !category) {
       return res.status(400).json({
@@ -12,23 +42,25 @@ export const addTransaction = async (req, res) => {
       });
     }
 
+    const rawMode = paymentMethod || paymentMode;
+    const finalPaymentMethod = normalizePaymentMethod(rawMode, "cash");
+
     const transaction = await Transaction.create({
-      title,
-      amount,
-      type,
+      title: title.trim(),
+      amount: Number(amount),
+      type: type.toLowerCase(),
       category,
-      date,
+      paymentMethod: finalPaymentMethod,
+      date: date || new Date(),
       user: req.user._id,
     });
 
     const io = req.app.get("io");
     if (io) {
-      const emoji = type === "income" ? "📈" : "📉";
-      const userId = req.user._id.toString();
-
-      io.to(userId).emit("new_notification", {
+      const emoji = type.toLowerCase() === "income" ? "📈" : "📉";
+      io.to(req.user._id.toString()).emit("new_notification", {
         title: `Transaction Added ${emoji}`,
-        message: `${type === "income" ? "Received" : "Spent"} Rs. ${amount} for "${title}"`,
+        message: `${type.toLowerCase() === "income" ? "Received" : "Spent"} ${amount} for "${title}"`,
         data: transaction,
       });
     }
@@ -39,55 +71,7 @@ export const addTransaction = async (req, res) => {
   }
 };
 
-// 🤖 Auto-Add Transaction (From SMS Auto-Reader)
-export const autoAddTransaction = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { amount, type, title, category, source } = req.body;
-
-    if (!amount || !type) {
-      return res.status(400).json({ message: "Amount and type are required" });
-    }
-
-    // Fetch user for dynamic currency display in notification
-    const user = await User.findById(userId);
-    const currency = user?.currency || "Rs.";
-
-    const transaction = await Transaction.create({
-      user: userId,
-      title: title || "Auto SMS Transaction",
-      amount: Number(amount),
-      type: type.toLowerCase(),
-      category: category || "General",
-      date: new Date(),
-      note: `Auto-recorded via ${source || 'SMS Reader'}`,
-    });
-
-    // ⚡ Real-Time Socket Notification
-    const io = req.app.get("io");
-    if (io) {
-      const emoji = type.toLowerCase() === "income" ? "📲 📈" : "📲 📉";
-
-      io.to(userId.toString()).emit("new_notification", {
-        title: `Auto Transaction Detected ${emoji}`,
-        message: `${type.toLowerCase() === "income" ? "Received" : "Spent"} ${currency} ${amount} at "${title || 'Store'}"`,
-        data: transaction,
-        createdAt: new Date(),
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: "Auto transaction recorded successfully",
-      data: transaction,
-    });
-  } catch (error) {
-    console.error("Auto Add Transaction Error:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get All Transactions (With Month & Year Filter)
+// Get All Transactions
 export const getTransactions = async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -111,36 +95,6 @@ export const getTransactions = async (req, res) => {
   }
 };
 
-// Delete Transaction
-export const deleteTransaction = async (req, res) => {
-  try {
-    const transaction = await Transaction.findById(req.params.id);
-
-    if (!transaction) {
-      return res.status(404).json({ message: "Transaction not found" });
-    }
-
-    if (transaction.user.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ message: "Not authorized" });
-    }
-
-    await transaction.deleteOne();
-
-    const io = req.app.get("io");
-    if (io) {
-      const userId = req.user._id.toString();
-      io.to(userId).emit("new_notification", {
-        title: "Transaction Deleted 🗑️",
-        message: `Transaction "${transaction.title}" was removed.`,
-      });
-    }
-
-    res.json({ message: "Transaction deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
 // Update Transaction
 export const updateTransaction = async (req, res) => {
   try {
@@ -154,10 +108,16 @@ export const updateTransaction = async (req, res) => {
       return res.status(401).json({ message: "Not authorized" });
     }
 
-    transaction.title = req.body.title || transaction.title;
-    transaction.amount = req.body.amount || transaction.amount;
-    transaction.type = req.body.type || transaction.type;
+    transaction.title = req.body.title ? req.body.title.trim() : transaction.title;
+    transaction.amount = req.body.amount !== undefined ? Number(req.body.amount) : transaction.amount;
+    transaction.type = req.body.type ? req.body.type.toLowerCase() : transaction.type;
     transaction.category = req.body.category || transaction.category;
+
+    const rawMode = req.body.paymentMethod || req.body.paymentMode;
+    if (rawMode) {
+      transaction.paymentMethod = normalizePaymentMethod(rawMode, transaction.paymentMethod);
+    }
+
     transaction.date = req.body.date || transaction.date;
 
     const updatedTransaction = await transaction.save();
@@ -178,7 +138,7 @@ export const updateTransaction = async (req, res) => {
   }
 };
 
-// Dashboard Summary (With Month & Year Filter)
+// Get Summary
 export const getSummary = async (req, res) => {
   try {
     const { month, year } = req.query;

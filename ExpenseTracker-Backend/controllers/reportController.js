@@ -1,15 +1,48 @@
 import PDFDocument from "pdfkit";
 import Transaction from "../models/Transaction.js";
 import Budget from "../models/Budget.js";
+import User from "../models/User.js"; // ✅ Import User model
 
 const MONTH_NAMES = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
+// Map currency code/symbol to clean PDF string
+const getCurrencySymbol = (userCurrency) => {
+  if (!userCurrency) return "Rs.";
+  
+  const curr = userCurrency.trim().toUpperCase();
+  
+  switch (curr) {
+    case "USD":
+    case "$":
+      return "$";
+    case "EUR":
+    case "€":
+      return "EUR";
+    case "GBP":
+    case "£":
+      return "GBP";
+    case "INR":
+    case "₹":
+      return "INR";
+    case "PKR":
+    case "RS":
+    case "RS.":
+      return "Rs.";
+    default:
+      return userCurrency; // Fallback to provided string
+  }
+};
+
 export const generateReport = async (req, res) => {
   try {
     const userId = req.user._id;
+
+    // 🗓️ Fetch User Currency Preference
+    const userDoc = await User.findById(userId);
+    const currencySymbol = getCurrencySymbol(userDoc?.currency || req.user?.currency);
 
     // 🗓️ Extract Start & End Period Params
     let { startMonth, startYear, endMonth, endYear } = req.query;
@@ -141,17 +174,17 @@ export const generateReport = async (req, res) => {
       .fillColor(TEXT_MAIN)
       .text(req.user?.email || "N/A");
 
-    // Metric Cards Grid
+    // Dynamic Metric Cards Grid (Using Dynamic Currency Symbol)
     const cardY = 135;
     const cardWidth = 118;
     const cardHeight = 52;
     const gap = 11;
 
     const metrics = [
-      { label: "Total Income", value: `Rs. ${totalIncome.toLocaleString()}`, color: SUCCESS_COLOR },
-      { label: "Total Expense", value: `Rs. ${totalExpense.toLocaleString()}`, color: DANGER_COLOR },
-      { label: "Net Savings", value: `Rs. ${savings.toLocaleString()}`, color: SAVINGS_COLOR },
-      { label: "Monthly Budget", value: `Rs. ${monthlyBudget.toLocaleString()}`, color: TEXT_MAIN },
+      { label: "Total Income", value: `${currencySymbol} ${totalIncome.toLocaleString()}`, color: SUCCESS_COLOR },
+      { label: "Total Expense", value: `${currencySymbol} ${totalExpense.toLocaleString()}`, color: DANGER_COLOR },
+      { label: "Net Savings", value: `${currencySymbol} ${savings.toLocaleString()}`, color: SAVINGS_COLOR },
+      { label: "Monthly Budget", value: `${currencySymbol} ${monthlyBudget.toLocaleString()}`, color: TEXT_MAIN },
     ];
 
     metrics.forEach((m, index) => {
@@ -241,7 +274,7 @@ export const generateReport = async (req, res) => {
         doc
           .fillColor(amountColor)
           .font("Helvetica-Bold")
-          .text(`${amountSign}Rs. ${Number(item.amount).toLocaleString()}`, 460, yPos, {
+          .text(`${amountSign}${currencySymbol} ${Number(item.amount).toLocaleString()}`, 460, yPos, {
             align: "right",
             width: 85,
           });

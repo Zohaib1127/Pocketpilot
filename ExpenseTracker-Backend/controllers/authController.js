@@ -5,18 +5,43 @@ import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 
-// Register User
+/**
+ * 🔐 Password Validation Helper Rule:
+ * - Minimum 8 characters long
+ * - At least 1 Uppercase letter (A-Z)
+ * - At least 1 Special character (@$!%*?& etc.)
+ */
+const validatePasswordRule = (password) => {
+  const minLength = password && password.length >= 8;
+  const hasCapital = /[A-Z]/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  return minLength && hasCapital && hasSpecial;
+};
+
+// 1. Register User
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    // Check required fields
     if (!name || !email || !password) {
       return res.status(400).json({
         message: "Please fill all fields",
       });
     }
 
-    const userExists = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.toString().trim().toLowerCase();
+
+    // Enforce Password Security Rule
+    if (!validatePasswordRule(password)) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 8 characters long, contain at least 1 uppercase letter (A-Z), and 1 special character.",
+      });
+    }
+
+    const userExists = await User.findOne({ email: cleanEmail });
 
     if (userExists) {
       return res.status(400).json({
@@ -25,8 +50,8 @@ export const registerUser = async (req, res) => {
     }
 
     const user = await User.create({
-      name,
-      email: email.toLowerCase(),
+      name: name.trim(),
+      email: cleanEmail,
       password,
     });
 
@@ -44,7 +69,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
-// Login User
+// 2. Login User
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -55,7 +80,8 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.toString().trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
 
     if (user && (await user.matchPassword(password))) {
       return res.status(200).json({
@@ -77,7 +103,7 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// Get User Profile
+// 3. Get User Profile
 export const getUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("-password");
@@ -96,7 +122,7 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-// Upload Profile Picture
+// 4. Upload Profile Picture
 export const uploadProfilePicture = async (req, res) => {
   try {
     if (!req.file) {
@@ -138,11 +164,15 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 1. Forgot Password (Generates 6-Digit OTP & Sends Email)
+// 5. Forgot Password (Generates 6-Digit OTP & Sends Email)
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const cleanEmail = email ? email.toString().trim().toLowerCase() : "";
+
+    if (!cleanEmail) {
+      return res.status(400).json({ message: "Email is required" });
+    }
 
     const user = await User.findOne({ email: cleanEmail });
 
@@ -179,12 +209,12 @@ export const forgotPassword = async (req, res) => {
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9;">
           <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 10px; padding: 25px; border: 1px solid #e1e8ed;">
-            <h2 style="color: #4F46E5; text-align: center;">PocketPilot</h2>
+            <h2 style="color: #10B981; text-align: center;">PocketPilot</h2>
             <hr style="border: none; border-top: 1px solid #eee;" />
             <p>Hi <b>${user.name || "User"}</b>,</p>
             <p>You requested to reset your password. Use the following 6-digit OTP code to complete the process:</p>
             <div style="text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #4F46E5; background: #EEF2FF; padding: 10px 20px; border-radius: 8px; display: inline-block;">${otp}</span>
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #10B981; background: #ECFDF5; padding: 10px 20px; border-radius: 8px; display: inline-block;">${otp}</span>
             </div>
             <p style="color: #666; font-size: 13px;">This code is valid for <b>10 minutes</b>. If you didn't request this, please ignore this email.</p>
           </div>
@@ -205,13 +235,25 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// 2. Reset Password (Verifies OTP & Updates Password)
+// 6. Reset Password (Verifies OTP & Updates Password)
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
     const cleanEmail = email ? email.toString().trim().toLowerCase() : "";
     const cleanOtp = otp ? otp.toString().trim() : "";
+
+    if (!cleanEmail || !cleanOtp || !newPassword) {
+      return res.status(400).json({ message: "Please fill all fields" });
+    }
+
+    // Enforce Password Security Rule on Reset
+    if (!validatePasswordRule(newPassword)) {
+      return res.status(400).json({
+        message:
+          "New password must be at least 8 characters long, contain at least 1 uppercase letter (A-Z), and 1 special character.",
+      });
+    }
 
     console.log(
       `\n🔍 VERIFYING OTP -> Email: "${cleanEmail}" | OTP Input: "${cleanOtp}"`
@@ -248,7 +290,7 @@ export const resetPassword = async (req, res) => {
         .json({ message: "OTP has expired. Please request a new one." });
     }
 
-    // Step 4: Save new password and clear fields
+    // Step 4: Save new password and clear OTP fields
     user.password = newPassword;
     user.resetOtp = undefined;
     user.resetOtpExpire = undefined;

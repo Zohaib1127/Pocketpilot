@@ -7,19 +7,15 @@ const transactionSchema = new mongoose.Schema(
       required: [true, "Please add a title"],
       trim: true,
     },
-
     amount: {
       type: Number,
       required: [true, "Please add an amount"],
     },
-
     type: {
       type: String,
       enum: ["income", "expense"],
       required: [true, "Please specify type as income or expense"],
     },
-
-    // Step 1: Updated category schema with enum & default
     category: {
       type: String,
       enum: [
@@ -27,6 +23,8 @@ const transactionSchema = new mongoose.Schema(
         "Travel",
         "Shopping",
         "Salary",
+        "Servant Salary",
+        "Labor Salary",
         "Bills",
         "Health",
         "Education",
@@ -36,12 +34,17 @@ const transactionSchema = new mongoose.Schema(
       default: "Other",
       required: true,
     },
-
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "credit_card", "debit_card", "bank_transfer"],
+      default: "cash",
+      trim: true,
+      lowercase: true,
+    },
     date: {
       type: Date,
       default: Date.now,
     },
-
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -54,5 +57,4 @@ const transactionSchema = new mongoose.Schema(
 );
 
 const Transaction = mongoose.model("Transaction", transactionSchema);
-
 export default Transaction;

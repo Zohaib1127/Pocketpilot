@@ -2,10 +2,8 @@ import express from "express";
 import protect from "../middleware/authMiddleware.js";
 import {
   addTransaction,
-  autoAddTransaction, // ✅ Imported auto-add controller
   getTransactions,
   updateTransaction,
-  deleteTransaction,
   getSummary,
 } from "../controllers/transactionController.js";
 
@@ -17,16 +15,12 @@ router
   .get(protect, getTransactions)
   .post(protect, addTransaction);
 
-// 🤖 Auto-Detect SMS Transaction Route
-router.post("/auto-add", protect, autoAddTransaction);
-
 // Summary Route
 router.get("/summary", protect, getSummary);
 
-// Update + Delete by ID
+// Update by ID
 router
   .route("/:id")
-  .put(protect, updateTransaction)
-  .delete(protect, deleteTransaction);
+  .put(protect, updateTransaction);
 
 export default router;
