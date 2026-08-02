@@ -6,11 +6,14 @@ const normalizePaymentMethod = (rawMode, fallback = "cash") => {
 
   let cleanMode = String(rawMode).toLowerCase().trim();
 
+  // Clean special characters like spaces, dashes, underscores for robust matching
+  cleanMode = cleanMode.replace(/[\s\-_]+/g, "");
+
   // Exact matches
   if (cleanMode === "cash") return "cash";
-  if (cleanMode === "credit_card" || cleanMode === "creditcard") return "credit_card";
-  if (cleanMode === "debit_card" || cleanMode === "debitcard") return "debit_card";
-  if (cleanMode === "bank_transfer" || cleanMode === "banktransfer") return "bank_transfer";
+  if (cleanMode === "creditcard") return "credit_card";
+  if (cleanMode === "debitcard") return "debit_card";
+  if (cleanMode === "banktransfer" || cleanMode === "bank") return "bank_transfer";
 
   // Keyword matching
   if (cleanMode.includes("debit")) return "debit_card";
@@ -34,7 +37,16 @@ const normalizePaymentMethod = (rawMode, fallback = "cash") => {
 // Add Transaction
 export const addTransaction = async (req, res) => {
   try {
-    const { title, amount, type, category, paymentMethod, paymentMode, date } = req.body;
+    const {
+      title,
+      amount,
+      type,
+      category,
+      paymentMethod,
+      paymentMode,
+      payment_method,
+      date,
+    } = req.body;
 
     if (!title || !amount || !type || !category) {
       return res.status(400).json({
@@ -42,7 +54,8 @@ export const addTransaction = async (req, res) => {
       });
     }
 
-    const rawMode = paymentMethod || paymentMode;
+    // Extract mode safely from any possible payload key
+    const rawMode = paymentMethod || paymentMode || payment_method;
     const finalPaymentMethod = normalizePaymentMethod(rawMode, "cash");
 
     const transaction = await Transaction.create({
@@ -95,7 +108,7 @@ export const getTransactions = async (req, res) => {
   }
 };
 
-// Update Transaction
+// Update Transaction (FIXED ISSUE HERE)
 export const updateTransaction = async (req, res) => {
   try {
     const transaction = await Transaction.findById(req.params.id);
@@ -113,10 +126,18 @@ export const updateTransaction = async (req, res) => {
     transaction.type = req.body.type ? req.body.type.toLowerCase() : transaction.type;
     transaction.category = req.body.category || transaction.category;
 
-    const rawMode = req.body.paymentMethod || req.body.paymentMode;
-    if (rawMode) {
-      transaction.paymentMethod = normalizePaymentMethod(rawMode, transaction.paymentMethod);
-    }
+    // FIX: Checked all key variations safely
+    const rawMode =
+      req.body.paymentMethod ||
+      req.body.paymentMode ||
+      req.body.payment_method ||
+      req.body.payment_mode;
+
+    // Always update paymentMethod using normalized value or existing fallback
+    transaction.paymentMethod = normalizePaymentMethod(
+      rawMode,
+      transaction.paymentMethod || "cash"
+    );
 
     transaction.date = req.body.date || transaction.date;
 
