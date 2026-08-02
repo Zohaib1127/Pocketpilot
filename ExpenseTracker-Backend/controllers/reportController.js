@@ -8,6 +8,16 @@ const MONTH_NAMES = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
+// Theme Accent Color Map (Matches App's Active Accent Theme)
+const THEME_ACCENTS = {
+  emerald: "#10B981",
+  cyber_mint: "#00F5A0",
+  forest_green: "#15803D",
+  lime_accent: "#84CC16",
+  teal_glow: "#14B8A6",
+  default: "#00F5A0", // Modern Neon Mint/Green
+};
+
 const getCurrencySymbol = (userCurrency) => {
   if (!userCurrency) return "Rs.";
   
@@ -42,6 +52,10 @@ export const generateReport = async (req, res) => {
     const userDoc = await User.findById(userId);
     const currencySymbol = getCurrencySymbol(userDoc?.currency || req.user?.currency);
 
+    // Extract Theme from Query or User Document
+    const selectedThemeKey = req.query.theme || userDoc?.accentTheme || "default";
+    const ACCENT_COLOR = THEME_ACCENTS[selectedThemeKey] || THEME_ACCENTS.default;
+
     let { startMonth, startYear, endMonth, endYear } = req.query;
 
     const sMonth = startMonth ? parseInt(startMonth, 10) : new Date().getMonth() + 1;
@@ -75,13 +89,13 @@ export const generateReport = async (req, res) => {
     const savings = totalIncome - totalExpense;
     const monthlyBudget = userBudget?.amount || 0;
 
-    // ⚡ Socket Notification Emit (With Type)
+    // ⚡ Socket Notification Emit (With Updated App Name 'Walletly')
     const io = req.app.get("io");
     if (io) {
       io.to(userId.toString()).emit("new_notification", {
         title: "Report Downloaded 📄",
-        message: `Your report for (${periodLabel}) has been generated successfully.`,
-        type: "info", // 👈 Added Type
+        message: `Your Walletly financial report (${periodLabel}) has been generated.`,
+        type: "info",
         createdAt: new Date(),
       });
     }
@@ -91,34 +105,43 @@ export const generateReport = async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Expense_Report_${sMonth}_${sYear}_to_${eMonth}_${eYear}.pdf`
+      `attachment; filename=Walletly_Report_${sMonth}_${sYear}_to_${eMonth}_${eYear}.pdf`
     );
 
     doc.pipe(res);
 
-    const PRIMARY_COLOR = "#4F46E5";
-    const SECONDARY_BG = "#EEF2FF";
-    const TEXT_MAIN = "#0F172A";
-    const TEXT_MUTED = "#64748B";
-    const SUCCESS_COLOR = "#10B981";
-    const DANGER_COLOR = "#EF4444";
-    const SAVINGS_COLOR = "#0284C7";
-    const CARD_BG = "#F8FAFC";
-    const BORDER_COLOR = "#E2E8F0";
+    // Modern Dark Theme Palette
+    const BG_DARK = "#090A0F";        // Base Page Black
+    const CARD_BG = "#12151E";        // Surface Card Dark Slate
+    const BORDER_DARK = "#222736";    // Muted Subtle Border
+    const TEXT_LIGHT = "#FFFFFF";     // Primary High Contrast White
+    const TEXT_MUTED = "#8E9BB0";     // Secondary Gray Text
+    const SUCCESS_COLOR = "#10B981";  // Emerald Green
+    const DANGER_COLOR = "#FF4D4D";   // Crimson Red
+    const SAVINGS_COLOR = "#3B82F6";  // Vibrant Blue
 
-    doc.rect(0, 0, 595.28, 12).fill(PRIMARY_COLOR);
+    // Draw Dark Background for Whole Document Page
+    const drawPageBackground = () => {
+      doc.rect(0, 0, 595.28, 841.89).fill(BG_DARK);
+    };
 
+    drawPageBackground();
+
+    // Top Glowing Accent Line
+    doc.rect(0, 0, 595.28, 6).fill(ACCENT_COLOR);
+
+    // Branding: Walletly Header
     doc
-      .fillColor(PRIMARY_COLOR)
+      .fillColor(ACCENT_COLOR)
       .fontSize(24)
       .font("Helvetica-Bold")
-      .text("PocketPilot", 40, 35);
+      .text("Walletly", 40, 32);
 
     doc
       .fillColor(TEXT_MUTED)
-      .fontSize(9)
+      .fontSize(8.5)
       .font("Helvetica-Bold")
-      .text("FINANCIAL STATEMENT", 40, 63);
+      .text("EXECUTIVE FINANCIAL STATEMENT", 40, 60);
 
     const dateStr = new Date().toLocaleDateString("en-US", {
       year: "numeric",
@@ -127,82 +150,88 @@ export const generateReport = async (req, res) => {
     });
 
     doc
-      .fillColor(TEXT_MAIN)
-      .fontSize(10)
+      .fillColor(TEXT_LIGHT)
+      .fontSize(9.5)
       .font("Helvetica-Bold")
-      .text(`Period: ${periodLabel}`, 340, 38, { align: "right" });
+      .text(`Period: ${periodLabel}`, 340, 35, { align: "right" });
 
     doc
       .fillColor(TEXT_MUTED)
       .fontSize(8)
       .font("Helvetica")
-      .text(`Generated: ${dateStr}`, 340, 55, { align: "right" });
+      .text(`Generated: ${dateStr}`, 340, 52, { align: "right" });
 
+    // Divider
     doc
-      .moveTo(40, 80)
-      .lineTo(555, 80)
-      .strokeColor(BORDER_COLOR)
+      .moveTo(40, 78)
+      .lineTo(555, 78)
+      .strokeColor(BORDER_DARK)
       .lineWidth(1)
       .stroke();
 
+    // Account Details
     doc
-      .fontSize(11)
+      .fontSize(10)
       .font("Helvetica-Bold")
-      .fillColor(TEXT_MAIN)
-      .text("ACCOUNT INFORMATION", 40, 95);
+      .fillColor(ACCENT_COLOR)
+      .text("ACCOUNT SUMMARY", 40, 92);
 
     doc
-      .fontSize(9)
+      .fontSize(8.5)
       .font("Helvetica")
       .fillColor(TEXT_MUTED)
-      .text("Account Holder: ", 40, 112, { continued: true })
+      .text("Account Holder: ", 40, 108, { continued: true })
       .font("Helvetica-Bold")
-      .fillColor(TEXT_MAIN)
+      .fillColor(TEXT_LIGHT)
       .text(req.user?.name || "N/A", { continued: true })
       .font("Helvetica")
       .fillColor(TEXT_MUTED)
       .text("   |   Email: ", { continued: true })
       .font("Helvetica-Bold")
-      .fillColor(TEXT_MAIN)
+      .fillColor(TEXT_LIGHT)
       .text(req.user?.email || "N/A");
 
-    const cardY = 135;
+    // Summary Metric Cards
+    const cardY = 130;
     const cardWidth = 118;
-    const cardHeight = 52;
+    const cardHeight = 54;
     const gap = 11;
 
     const metrics = [
       { label: "Total Income", value: `${currencySymbol} ${totalIncome.toLocaleString()}`, color: SUCCESS_COLOR },
       { label: "Total Expense", value: `${currencySymbol} ${totalExpense.toLocaleString()}`, color: DANGER_COLOR },
       { label: "Net Savings", value: `${currencySymbol} ${savings.toLocaleString()}`, color: SAVINGS_COLOR },
-      { label: "Monthly Budget", value: `${currencySymbol} ${monthlyBudget.toLocaleString()}`, color: TEXT_MAIN },
+      { label: "Monthly Budget", value: `${currencySymbol} ${monthlyBudget.toLocaleString()}`, color: ACCENT_COLOR },
     ];
 
     metrics.forEach((m, index) => {
       const x = 40 + index * (cardWidth + gap);
 
+      // Dark Surface Box
       doc
         .roundedRect(x, cardY, cardWidth, cardHeight, 6)
-        .fillAndStroke(CARD_BG, BORDER_COLOR);
+        .fillAndStroke(CARD_BG, BORDER_DARK);
 
+      // Top Highlight Border Line
       doc.rect(x + 10, cardY, cardWidth - 20, 2).fill(m.color);
 
       doc
         .fillColor(TEXT_MUTED)
         .fontSize(7.5)
         .font("Helvetica-Bold")
-        .text(m.label.toUpperCase(), x + 10, cardY + 10);
+        .text(m.label.toUpperCase(), x + 10, cardY + 12);
 
       doc
         .fillColor(m.color)
         .fontSize(10)
         .font("Helvetica-Bold")
-        .text(m.value, x + 10, cardY + 26);
+        .text(m.value, x + 10, cardY + 28);
     });
 
+    // Table Header Drawing Helper
     const drawTableHeader = (y) => {
-      doc.rect(40, y, 515, 22).fill(SECONDARY_BG);
-      doc.fillColor(PRIMARY_COLOR).fontSize(8.5).font("Helvetica-Bold");
+      doc.roundedRect(40, y, 515, 22, 4).fill("#161924");
+      doc.fillColor(ACCENT_COLOR).fontSize(8.5).font("Helvetica-Bold");
 
       doc.text("TITLE", 50, y + 6);
       doc.text("CATEGORY", 190, y + 6);
@@ -211,13 +240,13 @@ export const generateReport = async (req, res) => {
       doc.text("AMOUNT", 460, y + 6, { align: "right", width: 85 });
     };
 
-    let tableTop = 205;
+    let tableTop = 202;
 
     doc
-      .fillColor(TEXT_MAIN)
-      .fontSize(11)
+      .fillColor(TEXT_LIGHT)
+      .fontSize(10.5)
       .font("Helvetica-Bold")
-      .text(`TRANSACTION HISTORY (${transactions.length})`, 40, tableTop);
+      .text(`TRANSACTION LOG (${transactions.length})`, 40, tableTop);
 
     tableTop += 18;
     drawTableHeader(tableTop);
@@ -227,20 +256,22 @@ export const generateReport = async (req, res) => {
     if (transactions.length === 0) {
       doc
         .fillColor(TEXT_MUTED)
-        .fontSize(9.5)
+        .fontSize(9)
         .font("Helvetica")
-        .text("No transactions recorded for this period.", 50, yPos + 10);
+        .text("No transactions recorded for this selected period.", 50, yPos + 10);
     } else {
       transactions.forEach((item, index) => {
         if (yPos > 730) {
           doc.addPage();
+          drawPageBackground();
           yPos = 40;
           drawTableHeader(yPos);
           yPos += 24;
         }
 
+        // Alternating Striped Rows
         if (index % 2 === 0) {
-          doc.rect(40, yPos - 3, 515, 20).fill("#FAFAFA");
+          doc.rect(40, yPos - 3, 515, 20).fill("#0D0E14");
         }
 
         const isIncome = item.type === "income";
@@ -252,12 +283,12 @@ export const generateReport = async (req, res) => {
           : "N/A";
 
         doc
-          .fillColor(TEXT_MAIN)
+          .fillColor(TEXT_LIGHT)
           .fontSize(8.5)
           .font("Helvetica")
           .text(item.title || "N/A", 50, yPos, { width: 130, height: 12 });
 
-        doc.fillColor(TEXT_MAIN).text(item.category || "General", 190, yPos, { width: 110 });
+        doc.fillColor(TEXT_LIGHT).text(item.category || "General", 190, yPos, { width: 110 });
         doc.fillColor(TEXT_MUTED).text(itemDate, 310, yPos, { width: 70 });
         doc.fillColor(TEXT_MUTED).text(item.type ? item.type.toUpperCase() : "N/A", 390, yPos);
 
@@ -271,26 +302,28 @@ export const generateReport = async (req, res) => {
 
         yPos += 20;
 
+        // Subtle Row Separator
         doc
           .moveTo(40, yPos - 2)
           .lineTo(555, yPos - 2)
-          .strokeColor("#F1F5F9")
+          .strokeColor("#171A26")
           .lineWidth(0.5)
           .stroke();
       });
     }
 
+    // Page Footer (Loop through buffered pages)
     const range = doc.bufferedPageRange();
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
 
-      doc.moveTo(40, 770).lineTo(555, 770).strokeColor(BORDER_COLOR).lineWidth(0.5).stroke();
+      doc.moveTo(40, 770).lineTo(555, 770).strokeColor(BORDER_DARK).lineWidth(0.5).stroke();
 
       doc
         .fillColor(TEXT_MUTED)
         .fontSize(7.5)
         .font("Helvetica")
-        .text("This is a computer-generated statement from PocketPilot. No signature required.", 40, 778);
+        .text("This is an official computer-generated statement from Walletly.", 40, 778);
 
       doc
         .fillColor(TEXT_MUTED)
@@ -302,6 +335,6 @@ export const generateReport = async (req, res) => {
     doc.end();
   } catch (error) {
     console.error("PDF Generation Error:", error);
-    res.status(500).json({ message: "Failed to generate report PDF" });
+    res.status(500).json({ message: "Failed to generate Walletly report PDF" });
   }
 };
