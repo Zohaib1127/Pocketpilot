@@ -10,6 +10,8 @@ import {
   uploadProfilePicture,
   forgotPassword,
   resetPassword,
+  deleteAccount,   // 👈 Added
+  exportUserData,  // 👈 Added
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -34,5 +36,9 @@ router.post(
   upload.single("image"),
   uploadProfilePicture
 );
+
+// Account Management Routes (Google Play Store Policy & User Data)
+router.delete("/delete-account", protect, deleteAccount);
+router.get("/export-data", protect, exportUserData);
 
 export default router;

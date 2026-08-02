@@ -3,6 +3,7 @@ dotenv.config();
 
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
+import Transaction from "../models/Transaction.js"; // Needed for data deletion & export
 import generateToken from "../utils/generateToken.js";
 
 const validatePasswordRule = (password) => {
@@ -141,7 +142,7 @@ export const uploadProfilePicture = async (req, res) => {
       io.to(userId).emit("new_notification", {
         title: "Profile Updated 👤",
         message: "Your profile picture has been updated successfully.",
-        type: "success", // 👈 Added Type
+        type: "success",
         data: { avatar: user.avatar },
       });
     }
@@ -157,7 +158,7 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password
+// 5. Forgot Password (Updated to Walletly Branding)
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -190,20 +191,21 @@ export const forgotPassword = async (req, res) => {
     });
 
     const mailOptions = {
-      from: `"PocketPilot" <${process.env.EMAIL_USER}>`,
+      from: `"Walletly" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: "Password Reset Code - PocketPilot",
+      subject: "Password Reset Code - Walletly",
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f6f9;">
-          <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 10px; padding: 25px; border: 1px solid #e1e8ed;">
-            <h2 style="color: #10B981; text-align: center;">PocketPilot</h2>
-            <hr style="border: none; border-top: 1px solid #eee;" />
-            <p>Hi <b>${user.name || "User"}</b>,</p>
-            <p>You requested to reset your password. Use the following 6-digit OTP code to complete the process:</p>
-            <div style="text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #10B981; background: #ECFDF5; padding: 10px 20px; border-radius: 8px; display: inline-block;">${otp}</span>
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #090A0F; color: #ffffff;">
+          <div style="max-width: 500px; margin: 0 auto; background: #12151E; border-radius: 12px; padding: 25px; border: 1px solid #00F5A0;">
+            <h2 style="color: #00F5A0; text-align: center; font-size: 26px; font-weight: 800; margin-bottom: 5px;">Walletly</h2>
+            <p style="text-align: center; color: #888888; font-size: 12px; margin-top: 0;">Smart Financial Management</p>
+            <hr style="border: none; border-top: 1px solid #1F1F1F; margin: 20px 0;" />
+            <p style="color: #E2E8F0;">Hi <b>${user.name || "User"}</b>,</p>
+            <p style="color: #A0AEC0;">You requested to reset your password. Use the following 6-digit OTP code to complete the process:</p>
+            <div style="text-align: center; margin: 25px 0;">
+              <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #00F5A0; background: rgba(0, 245, 160, 0.1); padding: 12px 24px; border-radius: 8px; border: 1px solid #00F5A0; display: inline-block;">${otp}</span>
             </div>
-            <p style="color: #666; font-size: 13px;">This code is valid for <b>10 minutes</b>. If you didn't request this, please ignore this email.</p>
+            <p style="color: #718096; font-size: 12px; text-align: center;">This code is valid for <b>10 minutes</b>. If you didn't request this, please ignore this email.</p>
           </div>
         </div>
       `,
@@ -274,5 +276,41 @@ export const resetPassword = async (req, res) => {
     res
       .status(500)
       .json({ message: error.message || "Failed to reset password." });
+  }
+};
+
+// 7. Delete User Account (Google Play Mandated)
+export const deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Remove all transactions associated with user
+    await Transaction.deleteMany({ userId: userId });
+
+    // Remove user account
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Your Walletly account and all associated data have been permanently deleted.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Failed to delete account." });
+  }
+};
+
+// 8. Export User Data
+export const exportUserData = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).select("-password");
+    const transactions = await Transaction.find({ userId: userId });
+
+    res.status(200).json({
+      profile: user,
+      transactions: transactions,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Failed to export data." });
   }
 };
