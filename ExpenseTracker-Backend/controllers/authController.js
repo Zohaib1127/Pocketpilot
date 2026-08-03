@@ -1,13 +1,13 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { auth } from "../config/firebase.js"; // Correct Named Import
+import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
 
 console.log("--------------------------------------------------");
-console.log("⚙️  [AUTH CONTROLLER] Initializing Firebase Auth...");
+console.log("⚙️  [AUTH CONTROLLER] Initialized with Nodemailer OTP System");
 console.log("--------------------------------------------------");
 
 const validatePasswordRule = (password) => {
@@ -169,10 +169,10 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password (Direct Firebase Auto-Email REST API)
+// 5. Forgot Password (Nodemailer 6-Digit OTP Generator)
 export const forgotPassword = async (req, res) => {
   console.log("==================================================");
-  console.log("📩 [FORGOT PASSWORD - FIREBASE] Process started...");
+  console.log("📩 [FORGOT PASSWORD - NODEMAILER OTP] Process started...");
   console.log("📥 [FORGOT PASSWORD] Raw Body:", req.body);
 
   try {
@@ -198,60 +198,58 @@ export const forgotPassword = async (req, res) => {
 
     console.log(`✅ [FORGOT PASSWORD] User found: ${user.name} (${user._id})`);
 
-    // Step A: Ensure User Exists in Firebase Auth
-    try {
-      await auth.getUserByEmail(cleanEmail);
-      console.log("✅ User exists in Firebase Auth.");
-    } catch (firebaseUserError) {
-      if (firebaseUserError.code === "auth/user-not-found") {
-        console.log("⚠️ User not in Firebase Auth. Syncing user to Firebase...");
-        await auth.createUser({
-          email: cleanEmail,
-          displayName: user.name || "Walletly User",
-        });
-        console.log("🎉 User created in Firebase Auth successfully!");
-      } else {
-        throw firebaseUserError;
-      }
-    }
+    // Generate 6-Digit OTP Code
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-    // Step B: Trigger Firebase REST API to Send Reset Email Directly to User Inbox
-    const firebaseApiKey = process.env.FIREBASE_API_KEY;
-    console.log("🔑 [FIREBASE API KEY CHECK]:", firebaseApiKey ? "KEY EXISTS ✅" : "KEY MISSING ❌");
+    // Save OTP to DB
+    user.resetOtp = otp;
+    user.resetOtpExpire = otpExpire;
+    await user.save();
+    console.log(`🔢 [FORGOT PASSWORD] Generated OTP for ${cleanEmail}: ${otp}`);
 
-    if (!firebaseApiKey) {
-      throw new Error("FIREBASE_API_KEY is missing in environment variables!");
-    }
+    // Create Nodemailer Transporter
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
 
-    console.log("🔥 Triggering Firebase REST API email dispatch...");
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestType: "PASSWORD_RESET",
-          email: cleanEmail,
-        }),
-      }
-    );
+    const mailOptions = {
+      from: `"Walletly Security" <${process.env.EMAIL_USER}>`,
+      to: cleanEmail,
+      subject: "Your Walletly Password Reset Code 🔑",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; background-color: #090A0F; color: #ffffff; border-radius: 12px; border: 1px solid #1F2937;">
+          <h2 style="color: #10B981; margin-bottom: 5px;">Walletly</h2>
+          <p style="color: #9CA3AF; font-size: 14px;">Password Reset Verification Code</p>
+          <hr style="border: 0; border-top: 1px solid #1F2937; margin: 15px 0;" />
+          <p style="font-size: 15px; color: #E5E7EB;">Hello <strong>${user.name || "User"}</strong>,</p>
+          <p style="font-size: 14px; color: #9CA3AF;">Use the 6-digit verification code below to reset your Walletly password:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="background-color: #111827; letter-spacing: 6px; color: #10B981; font-size: 28px; font-weight: bold; padding: 12px 24px; border-radius: 8px; border: 1px solid #10B981;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #EF4444; font-size: 13px; text-align: center;">⏱️ This code will expire in 10 minutes.</p>
+          <p style="color: #6B7280; font-size: 12px; margin-top: 25px;">If you did not request this code, please ignore this email.</p>
+        </div>
+      `,
+    };
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("❌ Firebase REST API Error Details:", data);
-      throw new Error(data.error?.message || "Failed to send reset email via Firebase REST API");
-    }
-
-    console.log("🎉 [FIREBASE EMAIL SENT SUCCESSFULLY TO]:", cleanEmail);
+    console.log("📧 Sending OTP email via Nodemailer...");
+    await transporter.sendMail(mailOptions);
+    console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY TO]:", cleanEmail);
 
     res.status(200).json({
-      message: "Password reset email sent successfully! Please check your inbox.",
+      message: "A 6-digit OTP code has been sent to your email!",
     });
   } catch (error) {
     console.error("❌ [FORGOT PASSWORD ERROR]:", error.message);
     return res.status(500).json({
-      message: error.message || "Failed to send reset email.",
+      message: error.message || "Failed to send OTP email.",
     });
   }
   console.log("==================================================");
