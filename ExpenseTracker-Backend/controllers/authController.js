@@ -16,16 +16,21 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-// Render & Cloud Friendly Transporter Setup
+// 🟢 FIX: Explicit Port 465 SSL Transporter (Fixes Local/Render Hang & Timeout Issue)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // SSL for Port 465
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false, // Bypass SSL Cert restrictions on cloud servers
+    rejectUnauthorized: false, // Bypass SSL Cert restrictions on local/cloud servers
   },
+  connectionTimeout: 10000, // 10 sec connection limit to avoid infinite hang
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 const validatePasswordRule = (password) => {
