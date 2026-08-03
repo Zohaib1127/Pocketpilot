@@ -1,10 +1,16 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import dns from "dns";
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
+
+// ⚡ FIX 1: Enforce System-Level DNS Lookup Order to IPv4 First
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
 
 // Clean env variables (Spaces strip karna zaroori hai)
 const EMAIL_USER = (process.env.EMAIL_USER || "").trim();
@@ -16,18 +22,38 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-
+// 🟢 FIX 2: Guaranteed IPv4 Connection Wrapper (Bypasses ENETUNREACH / IPv6 Errors)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
-  family: 4,
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // Port 587 uses STARTTLS
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: EMAIL_USER,
+    pass: EMAIL_PASS,
   },
+  tls: {
+    rejectUnauthorized: false,
+    ciphers: "SSLv3",
+  },
+  // Custom lookup wrapper to guarantee ONLY IPv4 addresses are returned
+  lookup: (hostname, options, callback) => {
+    dns.lookup(hostname, { family: 4 }, (err, address, family) => {
+      callback(err, address, family);
+    });
+  },
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 15000,
 });
 
-await transporter.verify();
-console.log("SMTP Connected");
+// Transporter connection verify karne ke liye log
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ [SMTP VERIFY ERROR]:", error.message);
+  } else {
+    console.log("🚀 [SMTP READY] Server is connected and ready to send emails!");
+  }
+});
 
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
