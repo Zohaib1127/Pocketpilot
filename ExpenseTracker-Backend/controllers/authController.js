@@ -3,8 +3,17 @@ dotenv.config();
 
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
-import Transaction from "../models/Transaction.js"; // Needed for data deletion & export
+import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
+
+// Reusable Transporter (Performance Optimization)
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
@@ -20,9 +29,7 @@ export const registerUser = async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "Please fill all fields",
-      });
+      return res.status(400).json({ message: "Please fill all fields" });
     }
 
     const cleanEmail = email.toString().trim().toLowerCase();
@@ -37,9 +44,7 @@ export const registerUser = async (req, res) => {
     const userExists = await User.findOne({ email: cleanEmail });
 
     if (userExists) {
-      return res.status(400).json({
-        message: "User already exists",
-      });
+      return res.status(400).json({ message: "User already exists" });
     }
 
     const user = await User.create({
@@ -56,9 +61,7 @@ export const registerUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -68,9 +71,7 @@ export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({
-        message: "Please fill all fields",
-      });
+      return res.status(400).json({ message: "Please fill all fields" });
     }
 
     const cleanEmail = email.toString().trim().toLowerCase();
@@ -86,13 +87,9 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    res.status(401).json({
-      message: "Invalid email or password",
-    });
+    res.status(401).json({ message: "Invalid email or password" });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -102,16 +99,12 @@ export const getUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id).select("-password");
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     res.status(200).json(user);
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -119,17 +112,13 @@ export const getUserProfile = async (req, res) => {
 export const uploadProfilePicture = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        message: "Please upload an image file",
-      });
+      return res.status(400).json({ message: "Please upload an image file" });
     }
 
     const user = await User.findById(req.user._id);
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     user.avatar = req.file.path || req.file.filename;
@@ -152,13 +141,11 @@ export const uploadProfilePicture = async (req, res) => {
       avatar: user.avatar,
     });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// 5. Forgot Password (Updated to Walletly Branding)
+// 5. Forgot Password
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -176,19 +163,13 @@ export const forgotPassword = async (req, res) => {
         .json({ message: "User not found with this email" });
     }
 
+    // 6-digit OTP generate karein
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+    // Reset OTP and 10 Min Expiry
     user.resetOtp = otp;
     user.resetOtpExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
 
     const mailOptions = {
       from: `"Walletly" <${process.env.EMAIL_USER}>`,
@@ -251,14 +232,13 @@ export const resetPassword = async (req, res) => {
         .json({ message: "User not found with this email" });
     }
 
-    if (!user.resetOtp || user.resetOtp !== cleanOtp) {
+    // Direct String Match Check
+    if (!user.resetOtp || user.resetOtp.toString().trim() !== cleanOtp) {
       return res.status(400).json({ message: "Invalid OTP code" });
     }
 
-    if (
-      !user.resetOtpExpire ||
-      Date.now() > new Date(user.resetOtpExpire).getTime()
-    ) {
+    // Expiry Check Fix
+    if (!user.resetOtpExpire || Date.now() > Number(user.resetOtpExpire)) {
       return res
         .status(400)
         .json({ message: "OTP has expired. Please request a new one." });
@@ -279,23 +259,23 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// 7. Delete User Account (Google Play Mandated)
+// 7. Delete User Account
 export const deleteAccount = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Remove all transactions associated with user
     await Transaction.deleteMany({ userId: userId });
-
-    // Remove user account
     await User.findByIdAndDelete(userId);
 
     res.status(200).json({
       success: true,
-      message: "Your Walletly account and all associated data have been permanently deleted.",
+      message:
+        "Your Walletly account and all associated data have been permanently deleted.",
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || "Failed to delete account." });
+    res
+      .status(500)
+      .json({ message: error.message || "Failed to delete account." });
   }
 };
 
@@ -311,6 +291,8 @@ export const exportUserData = async (req, res) => {
       transactions: transactions,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || "Failed to export data." });
+    res
+      .status(500)
+      .json({ message: error.message || "Failed to export data." });
   }
 };
