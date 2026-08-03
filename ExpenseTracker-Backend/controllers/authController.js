@@ -17,13 +17,16 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-// 🟢 Clean & Standard Gmail Transporter for Cloud Hosting (Render, Vercel, etc.)
+// 🟢 Standard Gmail Transporter
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
+  requireTLS: true,
 });
 
 const validatePasswordRule = (password) => {
@@ -245,9 +248,10 @@ export const forgotPassword = async (req, res) => {
       `,
     };
 
-    console.log("Sending email...");
+    console.log("Before sendMail");
     const info = await transporter.sendMail(mailOptions);
-    console.log("🎉 [FORGOT PASSWORD] Email Sent Details:", info);
+    console.log("After sendMail");
+    console.log(info);
 
     res.status(200).json({
       message: "6-digit OTP code sent successfully!",
