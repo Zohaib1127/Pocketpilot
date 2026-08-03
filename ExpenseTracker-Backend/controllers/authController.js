@@ -6,9 +6,11 @@ import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
 
-// Reusable Transporter (Performance Optimization)
+// Explicit Port 465 SSL Transporter (Fixes Cloud Platform Connection Block / Timeout)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // SSL for Port 465
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -168,7 +170,7 @@ export const forgotPassword = async (req, res) => {
 
     // Reset OTP and 10 Min Expiry
     user.resetOtp = otp;
-    user.resetOtpExpire = Date.now() + 10 * 60 * 1000;
+    user.resetOtpExpire = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     const mailOptions = {
@@ -232,13 +234,11 @@ export const resetPassword = async (req, res) => {
         .json({ message: "User not found with this email" });
     }
 
-    // Direct String Match Check
     if (!user.resetOtp || user.resetOtp.toString().trim() !== cleanOtp) {
       return res.status(400).json({ message: "Invalid OTP code" });
     }
 
-    // Expiry Check Fix
-    if (!user.resetOtpExpire || Date.now() > Number(user.resetOtpExpire)) {
+    if (!user.resetOtpExpire || Date.now() > new Date(user.resetOtpExpire).getTime()) {
       return res
         .status(400)
         .json({ message: "OTP has expired. Please request a new one." });
