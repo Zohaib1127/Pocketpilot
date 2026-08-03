@@ -1,5 +1,7 @@
 import dns from "dns";
 // ⚡ FIX: Force Node.js to use Google's Public DNS (Fixes querySrv ETIMEOUT)
+// IPv4 ko priority do
+dns.setDefaultResultOrder("ipv4first");
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 import express from "express";

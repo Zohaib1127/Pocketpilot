@@ -16,23 +16,18 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-/// 🟢 FIX: Force IPv4 (family: 4) to bypass IPv6 ENETUNREACH network error
+
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // Port 587 uses STARTTLS
+  service: "gmail",
+  family: 4,
   auth: {
-    user: EMAIL_USER,
-    pass: EMAIL_PASS,
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  family: 4, // 👈 THIS IS THE KEY: Forces Nodemailer to use IPv4 only!
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 15000,
 });
+
+await transporter.verify();
+console.log("SMTP Connected");
 
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
