@@ -1,17 +1,13 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { Resend } from "resend";
+import { auth } from "../config/firebase.js"; // Correct Named Import
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
 
-// Initialize Resend Client
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 console.log("--------------------------------------------------");
-console.log("⚙️  [AUTH CONTROLLER] Initializing Resend API...");
-console.log("🔑  RESEND_API_KEY Loaded:", process.env.RESEND_API_KEY ? "Yes ✅" : "❌ NOT SET");
+console.log("⚙️  [AUTH CONTROLLER] Initializing Firebase Auth...");
 console.log("--------------------------------------------------");
 
 const validatePasswordRule = (password) => {
@@ -173,10 +169,10 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password
+// 5. Forgot Password (Using Firebase Auth)
 export const forgotPassword = async (req, res) => {
   console.log("==================================================");
-  console.log("📩 [FORGOT PASSWORD] Process started...");
+  console.log("📩 [FORGOT PASSWORD - FIREBASE] Process started...");
   console.log("📥 [FORGOT PASSWORD] Raw Body:", req.body);
 
   try {
@@ -202,57 +198,20 @@ export const forgotPassword = async (req, res) => {
 
     console.log(`✅ [FORGOT PASSWORD] User found: ${user.name} (${user._id})`);
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log(`🔑 [FORGOT PASSWORD] Generated OTP: ${otp}`);
+    // Generate Password Reset Link using Modular Firebase Auth Instance
+    console.log("🔥 Generating password reset link via Firebase...");
+    const resetLink = await auth.generatePasswordResetLink(cleanEmail);
 
-    user.resetOtp = otp;
-    user.resetOtpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 Min Expiry
-    await user.save();
-
-    console.log("💾 [FORGOT PASSWORD] OTP and Expiry Date saved to MongoDB successfully");
-
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #090A0F; color: #ffffff;">
-        <div style="max-width: 500px; margin: 0 auto; background: #12151E; border-radius: 12px; padding: 25px; border: 1px solid #00F5A0;">
-          <h2 style="color: #00F5A0; text-align: center; font-size: 26px; font-weight: 800; margin-bottom: 5px;">Walletly</h2>
-          <p style="text-align: center; color: #888888; font-size: 12px; margin-top: 0;">Smart Financial Management</p>
-          <hr style="border: none; border-top: 1px solid #1F1F1F; margin: 20px 0;" />
-          <p style="color: #E2E8F0;">Hi <b>${user.name || "User"}</b>,</p>
-          <p style="color: #A0AEC0;">You requested to reset your password. Use the following 6-digit OTP code to complete the process:</p>
-          <div style="text-align: center; margin: 25px 0;">
-            <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #00F5A0; background: rgba(0, 245, 160, 0.1); padding: 12px 24px; border-radius: 8px; border: 1px solid #00F5A0; display: inline-block;">${otp}</span>
-          </div>
-          <p style="color: #718096; font-size: 12px; text-align: center;">This code is valid for <b>10 minutes</b>. If you didn't request this, please ignore this email.</p>
-        </div>
-      </div>
-    `;
-
-    console.log("Before sending Resend Email...");
-    const { data, error } = await resend.emails.send({
-      from: "Walletly <onboarding@resend.dev>",
-      to: [user.email], // Array use karo
-      subject: "Password Reset Code - Walletly",
-      html: htmlContent,
-    });
-    console.log("Resend Data:", data);
-    console.log("Resend Error:", error);
-
-    if (error) {
-      return res.status(500).json({
-        message: error.message || JSON.stringify(error),
-      });
-    }
-
-    console.log("Email Sent Successfully!");
+    console.log("🎉 [FIREBASE LINK GENERATED]:", resetLink);
 
     res.status(200).json({
-      message: "6-digit OTP code sent successfully!",
+      message: "Password reset link generated successfully!",
+      resetLink: resetLink,
     });
   } catch (error) {
     console.error("❌ [FORGOT PASSWORD ERROR]:", error);
     return res.status(500).json({
-      message: error.message || "Failed to send reset email.",
+      message: error.message || "Failed to generate reset link via Firebase.",
     });
   }
   console.log("==================================================");
