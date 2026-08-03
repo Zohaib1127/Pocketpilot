@@ -1,33 +1,18 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import dns from "dns";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
 
-// Clean env variables (Spaces strip karna zaroori hai)
-const EMAIL_USER = (process.env.EMAIL_USER || "").trim();
-const EMAIL_PASS = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
+// Initialize Resend Client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 console.log("--------------------------------------------------");
-console.log("⚙️  [AUTH CONTROLLER] Initializing Transporter...");
-console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
-console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
+console.log("⚙️  [AUTH CONTROLLER] Initializing Resend API...");
+console.log("🔑  RESEND_API_KEY Loaded:", process.env.RESEND_API_KEY ? "Yes ✅" : "❌ NOT SET");
 console.log("--------------------------------------------------");
-
-// 🟢 Standard Gmail Transporter
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: EMAIL_USER,
-    pass: EMAIL_PASS,
-  },
-  requireTLS: true,
-});
 
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
@@ -227,44 +212,38 @@ export const forgotPassword = async (req, res) => {
 
     console.log("💾 [FORGOT PASSWORD] OTP and Expiry Date saved to MongoDB successfully");
 
-    const mailOptions = {
-      from: `"Walletly Support" <${EMAIL_USER}>`,
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #090A0F; color: #ffffff;">
+        <div style="max-width: 500px; margin: 0 auto; background: #12151E; border-radius: 12px; padding: 25px; border: 1px solid #00F5A0;">
+          <h2 style="color: #00F5A0; text-align: center; font-size: 26px; font-weight: 800; margin-bottom: 5px;">Walletly</h2>
+          <p style="text-align: center; color: #888888; font-size: 12px; margin-top: 0;">Smart Financial Management</p>
+          <hr style="border: none; border-top: 1px solid #1F1F1F; margin: 20px 0;" />
+          <p style="color: #E2E8F0;">Hi <b>${user.name || "User"}</b>,</p>
+          <p style="color: #A0AEC0;">You requested to reset your password. Use the following 6-digit OTP code to complete the process:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #00F5A0; background: rgba(0, 245, 160, 0.1); padding: 12px 24px; border-radius: 8px; border: 1px solid #00F5A0; display: inline-block;">${otp}</span>
+          </div>
+          <p style="color: #718096; font-size: 12px; text-align: center;">This code is valid for <b>10 minutes</b>. If you didn't request this, please ignore this email.</p>
+        </div>
+      </div>
+    `;
+
+    console.log("Before sending Resend Email...");
+    const data = await resend.emails.send({
+      from: "Walletly <onboarding@resend.dev>",
       to: user.email,
       subject: "Password Reset Code - Walletly",
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #090A0F; color: #ffffff;">
-          <div style="max-width: 500px; margin: 0 auto; background: #12151E; border-radius: 12px; padding: 25px; border: 1px solid #00F5A0;">
-            <h2 style="color: #00F5A0; text-align: center; font-size: 26px; font-weight: 800; margin-bottom: 5px;">Walletly</h2>
-            <p style="text-align: center; color: #888888; font-size: 12px; margin-top: 0;">Smart Financial Management</p>
-            <hr style="border: none; border-top: 1px solid #1F1F1F; margin: 20px 0;" />
-            <p style="color: #E2E8F0;">Hi <b>${user.name || "User"}</b>,</p>
-            <p style="color: #A0AEC0;">You requested to reset your password. Use the following 6-digit OTP code to complete the process:</p>
-            <div style="text-align: center; margin: 25px 0;">
-              <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #00F5A0; background: rgba(0, 245, 160, 0.1); padding: 12px 24px; border-radius: 8px; border: 1px solid #00F5A0; display: inline-block;">${otp}</span>
-            </div>
-            <p style="color: #718096; font-size: 12px; text-align: center;">This code is valid for <b>10 minutes</b>. If you didn't request this, please ignore this email.</p>
-          </div>
-        </div>
-      `,
-    };
-
-    console.log("Before sendMail");
-    const info = await transporter.sendMail(mailOptions);
-    console.log("After sendMail");
-    console.log(info);
+      html: htmlContent,
+    });
+    console.log("After sending Resend Email. Response:", data);
 
     res.status(200).json({
       message: "6-digit OTP code sent successfully!",
     });
   } catch (error) {
-    console.error(error);
-    console.error("Code:", error.code);
-    console.error("Command:", error.command);
-    console.error("Response:", error.response);
-    console.error("ResponseCode:", error.responseCode);
-
+    console.error("❌ [FORGOT PASSWORD ERROR]:", error);
     return res.status(500).json({
-      message: error.message,
+      message: error.message || "Failed to send reset email.",
     });
   }
   console.log("==================================================");
