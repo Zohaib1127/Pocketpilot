@@ -169,7 +169,7 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password (Using Firebase Auth with Auto-Sync)
+// 5. Forgot Password (Direct Firebase Auto-Email REST API)
 export const forgotPassword = async (req, res) => {
   console.log("==================================================");
   console.log("📩 [FORGOT PASSWORD - FIREBASE] Process started...");
@@ -198,7 +198,7 @@ export const forgotPassword = async (req, res) => {
 
     console.log(`✅ [FORGOT PASSWORD] User found: ${user.name} (${user._id})`);
 
-    // Step A: Check / Ensure User Exists in Firebase Auth
+    // Step A: Ensure User Exists in Firebase Auth
     try {
       await auth.getUserByEmail(cleanEmail);
       console.log("✅ User exists in Firebase Auth.");
@@ -215,20 +215,43 @@ export const forgotPassword = async (req, res) => {
       }
     }
 
-    // Step B: Generate Password Reset Link
-    console.log("🔥 Generating password reset link via Firebase...");
-    const resetLink = await auth.generatePasswordResetLink(cleanEmail);
+    // Step B: Trigger Firebase REST API to Send Reset Email Directly to User Inbox
+    const firebaseApiKey = process.env.FIREBASE_API_KEY;
+    console.log("🔑 [FIREBASE API KEY CHECK]:", firebaseApiKey ? "KEY EXISTS ✅" : "KEY MISSING ❌");
 
-    console.log("🎉 [FIREBASE LINK GENERATED]:", resetLink);
+    if (!firebaseApiKey) {
+      throw new Error("FIREBASE_API_KEY is missing in environment variables!");
+    }
+
+    console.log("🔥 Triggering Firebase REST API email dispatch...");
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestType: "PASSWORD_RESET",
+          email: cleanEmail,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("❌ Firebase REST API Error Details:", data);
+      throw new Error(data.error?.message || "Failed to send reset email via Firebase REST API");
+    }
+
+    console.log("🎉 [FIREBASE EMAIL SENT SUCCESSFULLY TO]:", cleanEmail);
 
     res.status(200).json({
-      message: "Password reset link generated successfully!",
-      resetLink: resetLink,
+      message: "Password reset email sent successfully! Please check your inbox.",
     });
   } catch (error) {
-    console.error("❌ [FORGOT PASSWORD ERROR]:", error);
+    console.error("❌ [FORGOT PASSWORD ERROR]:", error.message);
     return res.status(500).json({
-      message: error.message || "Failed to generate reset link via Firebase.",
+      message: error.message || "Failed to send reset email.",
     });
   }
   console.log("==================================================");
