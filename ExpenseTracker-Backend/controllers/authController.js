@@ -22,20 +22,17 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-// 🟢 FIX 2: Guaranteed IPv4 Connection Wrapper (Bypasses ENETUNREACH / IPv6 Errors)
-// 🟢 FIX: Direct Google IPv4 Address to strictly bypass IPv6 resolution
 const transporter = nodemailer.createTransport({
-  host: "64.233.184.108", // Direct smtp.gmail.com IPv4 Address
-  port: 587,
-  secure: false, // Port 587 uses STARTTLS
-  servername: "smtp.gmail.com", // TLS handshake verification ke liye zaroori hai
+  host: "64.233.184.108",
+  port: 465,            // 👈 Port 465 for SSL
+  secure: true,          // 👈 Must be true for 465
+  servername: "smtp.gmail.com",
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
   tls: {
     rejectUnauthorized: false,
-    ciphers: "SSLv3",
   },
   connectionTimeout: 15000,
   greetingTimeout: 15000,
