@@ -208,19 +208,19 @@ export const forgotPassword = async (req, res) => {
     await user.save();
     console.log(`🔢 [FORGOT PASSWORD] Generated OTP for ${cleanEmail}: ${otp}`);
 
-    // ✅ Naya Render-Friendly Secure Transporter:
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // Port 465 ke liye true hona zaroori hai
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false // SSL Handshake Block hone se bachata hai
-  }
-});
+    // Render-Friendly Secure Transporter:
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true, // Port 465 ke liye true hona zaroori hai
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false // SSL Handshake Block hone se bachata hai
+      }
+    });
 
     const mailOptions = {
       from: `"Walletly Security" <${process.env.EMAIL_USER}>`,
@@ -244,11 +244,15 @@ const transporter = nodemailer.createTransport({
       `,
     };
 
-    console.log("📧 Sending OTP email via Nodemailer...");
-    await transporter.sendMail(mailOptions);
-    console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY TO]:", cleanEmail);
+    console.log("📧 Sending OTP email via Nodemailer in background...");
+    
+    // Non-blocking dispatch to avoid timeouts
+    transporter.sendMail(mailOptions)
+      .then(() => console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY TO]:", cleanEmail))
+      .catch((err) => console.error("❌ [NODEMAILER ERROR]:", err.message));
 
-    res.status(200).json({
+    // Return response instantly
+    return res.status(200).json({
       message: "A 6-digit OTP code has been sent to your email!",
     });
   } catch (error) {
@@ -257,7 +261,6 @@ const transporter = nodemailer.createTransport({
       message: error.message || "Failed to send OTP email.",
     });
   }
-  console.log("==================================================");
 };
 
 // 6. Reset Password
@@ -330,7 +333,6 @@ export const resetPassword = async (req, res) => {
       .status(500)
       .json({ message: error.message || "Failed to reset password." });
   }
-  console.log("==================================================");
 };
 
 // 7. Delete User Account
