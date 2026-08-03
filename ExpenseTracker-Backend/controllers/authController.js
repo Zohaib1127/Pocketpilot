@@ -169,7 +169,7 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password (Using Firebase Auth)
+// 5. Forgot Password (Using Firebase Auth with Auto-Sync)
 export const forgotPassword = async (req, res) => {
   console.log("==================================================");
   console.log("📩 [FORGOT PASSWORD - FIREBASE] Process started...");
@@ -198,7 +198,24 @@ export const forgotPassword = async (req, res) => {
 
     console.log(`✅ [FORGOT PASSWORD] User found: ${user.name} (${user._id})`);
 
-    // Generate Password Reset Link using Modular Firebase Auth Instance
+    // Step A: Check / Ensure User Exists in Firebase Auth
+    try {
+      await auth.getUserByEmail(cleanEmail);
+      console.log("✅ User exists in Firebase Auth.");
+    } catch (firebaseUserError) {
+      if (firebaseUserError.code === "auth/user-not-found") {
+        console.log("⚠️ User not in Firebase Auth. Syncing user to Firebase...");
+        await auth.createUser({
+          email: cleanEmail,
+          displayName: user.name || "Walletly User",
+        });
+        console.log("🎉 User created in Firebase Auth successfully!");
+      } else {
+        throw firebaseUserError;
+      }
+    }
+
+    // Step B: Generate Password Reset Link
     console.log("🔥 Generating password reset link via Firebase...");
     const resetLink = await auth.generatePasswordResetLink(cleanEmail);
 
