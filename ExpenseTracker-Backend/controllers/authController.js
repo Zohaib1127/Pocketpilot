@@ -253,16 +253,14 @@ export const forgotPassword = async (req, res) => {
       message: "6-digit OTP code sent successfully!",
     });
   } catch (error) {
-    console.error("🔴 [FORGOT PASSWORD ERROR] Catch block triggered:");
-    console.error("    Error Name:", error.name);
-    console.error("    Error Code:", error.code);
-    console.error("    Error Message:", error.message);
-    if (error.response) console.error("    SMTP Response:", error.response);
+    console.error(error);
+    console.error("Code:", error.code);
+    console.error("Command:", error.command);
+    console.error("Response:", error.response);
+    console.error("ResponseCode:", error.responseCode);
 
-    res.status(500).json({ 
-      message: error.message.includes("EAUTH") 
-        ? "Email Auth Failed. Check Gmail App Password." 
-        : `Email delivery failed: ${error.message}` 
+    return res.status(500).json({
+      message: error.message,
     });
   }
   console.log("==================================================");
