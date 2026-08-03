@@ -16,21 +16,22 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-// 🟢 FIX: Explicit Port 465 SSL Transporter (Fixes Local/Render Hang & Timeout Issue)
+/// 🟢 FIX: Port 587 with STARTTLS (Best for Local Networks)
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // SSL for Port 465
+  port: 587,
+  secure: false, // Port 587 ke liye false hona chahiye
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false, // Bypass SSL Cert restrictions on local/cloud servers
+    rejectUnauthorized: false,
+    ciphers: "SSLv3",
   },
-  connectionTimeout: 10000, // 10 sec connection limit to avoid infinite hang
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
+  connectionTimeout: 20000, // 20 seconds limit
+  greetingTimeout: 20000,
+  socketTimeout: 20000,
 });
 
 const validatePasswordRule = (password) => {
