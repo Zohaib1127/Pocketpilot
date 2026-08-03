@@ -7,11 +7,6 @@ import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
 
-// ⚡ FIX 1: Enforce System-Level DNS Lookup Order to IPv4 First
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder("ipv4first");
-}
-
 // Clean env variables (Spaces strip karna zaroori hai)
 const EMAIL_USER = (process.env.EMAIL_USER || "").trim();
 const EMAIL_PASS = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
@@ -22,33 +17,14 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
+// 🟢 Clean & Standard Gmail Transporter for Cloud Hosting (Render, Vercel, etc.)
 const transporter = nodemailer.createTransport({
-  host: "64.233.184.108",
-  port: 465,            // 👈 Port 465 for SSL
-  secure: true,          // 👈 Must be true for 465
-  servername: "smtp.gmail.com",
+  service: "gmail",
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 15000,
 });
-
-// Transporter connection status verify karne ke liye
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ [SMTP VERIFY ERROR]:", error.message);
-  } else {
-    console.log("🚀 [SMTP READY] Server is connected and ready to send emails!");
-  }
-});
-
-
 
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
@@ -269,10 +245,9 @@ export const forgotPassword = async (req, res) => {
       `,
     };
 
-    console.log(`📤 [FORGOT PASSWORD] Attempting Nodemailer send to: ${user.email}...`);
-    
+    console.log("Sending email...");
     const info = await transporter.sendMail(mailOptions);
-    console.log("🎉 [FORGOT PASSWORD] Nodemailer Success! MessageId:", info.messageId);
+    console.log("🎉 [FORGOT PASSWORD] Email Sent Details:", info);
 
     res.status(200).json({
       message: "6-digit OTP code sent successfully!",
