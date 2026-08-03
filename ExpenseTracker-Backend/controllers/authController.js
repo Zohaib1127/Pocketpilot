@@ -229,13 +229,22 @@ export const forgotPassword = async (req, res) => {
     `;
 
     console.log("Before sending Resend Email...");
-    const data = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: "Walletly <onboarding@resend.dev>",
-      to: user.email,
+      to: [user.email], // Array use karo
       subject: "Password Reset Code - Walletly",
       html: htmlContent,
     });
-    console.log("After sending Resend Email. Response:", data);
+    console.log("Resend Data:", data);
+    console.log("Resend Error:", error);
+
+    if (error) {
+      return res.status(500).json({
+        message: error.message || JSON.stringify(error),
+      });
+    }
+
+    console.log("Email Sent Successfully!");
 
     res.status(200).json({
       message: "6-digit OTP code sent successfully!",
