@@ -11,11 +11,11 @@ const MONTH_NAMES = [
 // Theme Accent Color Map (Matches App's Active Accent Theme)
 const THEME_ACCENTS = {
   emerald: "#10B981",
-  cyber_mint: "#00F5A0",
+  cyber_mint: "#059669",
   forest_green: "#15803D",
-  lime_accent: "#84CC16",
-  teal_glow: "#14B8A6",
-  default: "#00F5A0", // Modern Neon Mint/Green
+  lime_accent: "#65A30D",
+  teal_glow: "#0D9488",
+  default: "#10B981", // Modern Emerald Green Accent
 };
 
 const getCurrencySymbol = (userCurrency) => {
@@ -89,7 +89,7 @@ export const generateReport = async (req, res) => {
     const savings = totalIncome - totalExpense;
     const monthlyBudget = userBudget?.amount || 0;
 
-    // ⚡ Socket Notification Emit (With Updated App Name 'Walletly')
+    // Socket Notification Emit
     const io = req.app.get("io");
     if (io) {
       io.to(userId.toString()).emit("new_notification", {
@@ -110,19 +110,19 @@ export const generateReport = async (req, res) => {
 
     doc.pipe(res);
 
-    // Modern Dark Theme Palette
-    const BG_DARK = "#090A0F";        // Base Page Black
-    const CARD_BG = "#12151E";        // Surface Card Dark Slate
-    const BORDER_DARK = "#222736";    // Muted Subtle Border
-    const TEXT_LIGHT = "#FFFFFF";     // Primary High Contrast White
-    const TEXT_MUTED = "#8E9BB0";     // Secondary Gray Text
-    const SUCCESS_COLOR = "#10B981";  // Emerald Green
-    const DANGER_COLOR = "#FF4D4D";   // Crimson Red
-    const SAVINGS_COLOR = "#3B82F6";  // Vibrant Blue
+    // --- Clean White Theme Palette ---
+    const BG_LIGHT = "#FFFFFF";       // Clean White Page
+    const CARD_BG = "#F8FAFC";        // Light Gray Surface Box
+    const BORDER_LIGHT = "#E2E8F0";   // Soft Border Gray
+    const TEXT_DARK = "#0F172A";      // Primary Dark Text (High Contrast)
+    const TEXT_MUTED = "#64748B";     // Secondary Slate Gray Text
+    const SUCCESS_COLOR = "#10B981";  // Green for Income
+    const DANGER_COLOR = "#EF4444";   // Red for Expense
+    const SAVINGS_COLOR = "#2563EB";  // Blue for Net Savings
 
-    // Draw Dark Background for Whole Document Page
+    // Draw White Background for Whole Document Page
     const drawPageBackground = () => {
-      doc.rect(0, 0, 595.28, 841.89).fill(BG_DARK);
+      doc.rect(0, 0, 595.28, 841.89).fill(BG_LIGHT);
     };
 
     drawPageBackground();
@@ -150,7 +150,7 @@ export const generateReport = async (req, res) => {
     });
 
     doc
-      .fillColor(TEXT_LIGHT)
+      .fillColor(TEXT_DARK)
       .fontSize(9.5)
       .font("Helvetica-Bold")
       .text(`Period: ${periodLabel}`, 340, 35, { align: "right" });
@@ -161,11 +161,11 @@ export const generateReport = async (req, res) => {
       .font("Helvetica")
       .text(`Generated: ${dateStr}`, 340, 52, { align: "right" });
 
-    // Divider
+    // Divider Line
     doc
       .moveTo(40, 78)
       .lineTo(555, 78)
-      .strokeColor(BORDER_DARK)
+      .strokeColor(BORDER_LIGHT)
       .lineWidth(1)
       .stroke();
 
@@ -182,13 +182,13 @@ export const generateReport = async (req, res) => {
       .fillColor(TEXT_MUTED)
       .text("Account Holder: ", 40, 108, { continued: true })
       .font("Helvetica-Bold")
-      .fillColor(TEXT_LIGHT)
+      .fillColor(TEXT_DARK)
       .text(req.user?.name || "N/A", { continued: true })
       .font("Helvetica")
       .fillColor(TEXT_MUTED)
       .text("   |   Email: ", { continued: true })
       .font("Helvetica-Bold")
-      .fillColor(TEXT_LIGHT)
+      .fillColor(TEXT_DARK)
       .text(req.user?.email || "N/A");
 
     // Summary Metric Cards
@@ -207,12 +207,12 @@ export const generateReport = async (req, res) => {
     metrics.forEach((m, index) => {
       const x = 40 + index * (cardWidth + gap);
 
-      // Dark Surface Box
+      // Light Card Box
       doc
         .roundedRect(x, cardY, cardWidth, cardHeight, 6)
-        .fillAndStroke(CARD_BG, BORDER_DARK);
+        .fillAndStroke(CARD_BG, BORDER_LIGHT);
 
-      // Top Highlight Border Line
+      // Top Highlight Line
       doc.rect(x + 10, cardY, cardWidth - 20, 2).fill(m.color);
 
       doc
@@ -230,8 +230,8 @@ export const generateReport = async (req, res) => {
 
     // Table Header Drawing Helper
     const drawTableHeader = (y) => {
-      doc.roundedRect(40, y, 515, 22, 4).fill("#161924");
-      doc.fillColor(ACCENT_COLOR).fontSize(8.5).font("Helvetica-Bold");
+      doc.roundedRect(40, y, 515, 22, 4).fill("#F1F5F9");
+      doc.fillColor(TEXT_DARK).fontSize(8.5).font("Helvetica-Bold");
 
       doc.text("TITLE", 50, y + 6);
       doc.text("CATEGORY", 190, y + 6);
@@ -243,7 +243,7 @@ export const generateReport = async (req, res) => {
     let tableTop = 202;
 
     doc
-      .fillColor(TEXT_LIGHT)
+      .fillColor(TEXT_DARK)
       .fontSize(10.5)
       .font("Helvetica-Bold")
       .text(`TRANSACTION LOG (${transactions.length})`, 40, tableTop);
@@ -269,13 +269,13 @@ export const generateReport = async (req, res) => {
           yPos += 24;
         }
 
-        // Alternating Striped Rows
+        // Alternating Subtle Rows
         if (index % 2 === 0) {
-          doc.rect(40, yPos - 3, 515, 20).fill("#0D0E14");
+          doc.rect(40, yPos - 3, 515, 20).fill("#FAFAFA");
         }
 
         const isIncome = item.type === "income";
-        const amountColor = isIncome ? SUCCESS_COLOR : DANGER_COLOR;
+        const amountColor = isIncome ? SUCCESS_COLOR : DANGER_COLOR; // Green for Income, Red for Expense
         const amountSign = isIncome ? "+ " : "- ";
 
         const itemDate = item.date
@@ -283,12 +283,12 @@ export const generateReport = async (req, res) => {
           : "N/A";
 
         doc
-          .fillColor(TEXT_LIGHT)
+          .fillColor(TEXT_DARK)
           .fontSize(8.5)
           .font("Helvetica")
           .text(item.title || "N/A", 50, yPos, { width: 130, height: 12 });
 
-        doc.fillColor(TEXT_LIGHT).text(item.category || "General", 190, yPos, { width: 110 });
+        doc.fillColor(TEXT_DARK).text(item.category || "General", 190, yPos, { width: 110 });
         doc.fillColor(TEXT_MUTED).text(itemDate, 310, yPos, { width: 70 });
         doc.fillColor(TEXT_MUTED).text(item.type ? item.type.toUpperCase() : "N/A", 390, yPos);
 
@@ -302,11 +302,11 @@ export const generateReport = async (req, res) => {
 
         yPos += 20;
 
-        // Subtle Row Separator
+        // Row Separator Line
         doc
           .moveTo(40, yPos - 2)
           .lineTo(555, yPos - 2)
-          .strokeColor("#171A26")
+          .strokeColor("#E2E8F0")
           .lineWidth(0.5)
           .stroke();
       });
@@ -317,7 +317,7 @@ export const generateReport = async (req, res) => {
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
 
-      doc.moveTo(40, 770).lineTo(555, 770).strokeColor(BORDER_DARK).lineWidth(0.5).stroke();
+      doc.moveTo(40, 770).lineTo(555, 770).strokeColor(BORDER_LIGHT).lineWidth(0.5).stroke();
 
       doc
         .fillColor(TEXT_MUTED)
