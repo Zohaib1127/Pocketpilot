@@ -16,22 +16,22 @@ console.log("📧  EMAIL_USER:", EMAIL_USER ? EMAIL_USER : "❌ NOT SET");
 console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET");
 console.log("--------------------------------------------------");
 
-/// 🟢 FIX: Port 587 with STARTTLS (Best for Local Networks)
+/// 🟢 FIX: Force IPv4 (family: 4) to bypass IPv6 ENETUNREACH network error
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
-  secure: false, // Port 587 ke liye false hona chahiye
+  secure: false, // Port 587 uses STARTTLS
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
   },
   tls: {
     rejectUnauthorized: false,
-    ciphers: "SSLv3",
   },
-  connectionTimeout: 20000, // 20 seconds limit
-  greetingTimeout: 20000,
-  socketTimeout: 20000,
+  family: 4, // 👈 THIS IS THE KEY: Forces Nodemailer to use IPv4 only!
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 15000,
 });
 
 const validatePasswordRule = (password) => {
