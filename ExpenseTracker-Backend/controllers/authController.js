@@ -23,10 +23,12 @@ console.log("🔑  EMAIL_PASS:", EMAIL_PASS ? "******** (Loaded)" : "❌ NOT SET
 console.log("--------------------------------------------------");
 
 // 🟢 FIX 2: Guaranteed IPv4 Connection Wrapper (Bypasses ENETUNREACH / IPv6 Errors)
+// 🟢 FIX: Direct Google IPv4 Address to strictly bypass IPv6 resolution
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
+  host: "64.233.184.108", // Direct smtp.gmail.com IPv4 Address
   port: 587,
   secure: false, // Port 587 uses STARTTLS
+  servername: "smtp.gmail.com", // TLS handshake verification ke liye zaroori hai
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
@@ -35,18 +37,12 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false,
     ciphers: "SSLv3",
   },
-  // Custom lookup wrapper to guarantee ONLY IPv4 addresses are returned
-  lookup: (hostname, options, callback) => {
-    dns.lookup(hostname, { family: 4 }, (err, address, family) => {
-      callback(err, address, family);
-    });
-  },
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 15000,
 });
 
-// Transporter connection verify karne ke liye log
+// Transporter connection status verify karne ke liye
 transporter.verify((error, success) => {
   if (error) {
     console.error("❌ [SMTP VERIFY ERROR]:", error.message);
@@ -54,6 +50,8 @@ transporter.verify((error, success) => {
     console.log("🚀 [SMTP READY] Server is connected and ready to send emails!");
   }
 });
+
+
 
 const validatePasswordRule = (password) => {
   const minLength = password && password.length >= 8;
