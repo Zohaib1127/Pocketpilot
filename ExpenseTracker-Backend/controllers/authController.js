@@ -208,14 +208,19 @@ export const forgotPassword = async (req, res) => {
     await user.save();
     console.log(`🔢 [FORGOT PASSWORD] Generated OTP for ${cleanEmail}: ${otp}`);
 
-    // Create Nodemailer Transporter
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
+    // ✅ Naya Render-Friendly Secure Transporter:
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // Port 465 ke liye true hona zaroori hai
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false // SSL Handshake Block hone se bachata hai
+  }
+});
 
     const mailOptions = {
       from: `"Walletly Security" <${process.env.EMAIL_USER}>`,
