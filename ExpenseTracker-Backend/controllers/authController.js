@@ -7,7 +7,7 @@ import Transaction from "../models/Transaction.js";
 import generateToken from "../utils/generateToken.js";
 
 console.log("--------------------------------------------------");
-console.log("⚙️  [AUTH CONTROLLER] Initialized with Nodemailer OTP System");
+console.log("⚙️  [AUTH CONTROLLER] Initialized with Nodemailer OTP System (Render Optimized)");
 console.log("--------------------------------------------------");
 
 const validatePasswordRule = (password) => {
@@ -16,6 +16,26 @@ const validatePasswordRule = (password) => {
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
   return minLength && hasCapital && hasSpecial;
+};
+
+// ====================== CREATE TRANSPORTER (Render Optimized) ======================
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,                    // 465 more reliable on Render than 587
+    secure: true,                 // true for port 465
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS, // Google App Password (16 characters)
+    },
+    connectionTimeout: 30000,     // 30 seconds
+    greetingTimeout: 20000,
+    socketTimeout: 30000,
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
 };
 
 // 1. Register User
@@ -169,7 +189,7 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// 5. Forgot Password (Nodemailer 6-Digit OTP Generator - STUCK PROOF FIX)
+// 5. Forgot Password (Render Optimized + Better Error Handling)
 export const forgotPassword = async (req, res) => {
   console.log("==================================================");
   console.log("📩 [FORGOT PASSWORD - NODEMAILER OTP] Process started...");
@@ -182,6 +202,14 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
+    // Check environment variables
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error("❌ EMAIL_USER or EMAIL_PASS missing in environment variables");
+      return res.status(500).json({
+        message: "Email service is not configured properly. Please contact support.",
+      });
+    }
+
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
@@ -190,32 +218,17 @@ export const forgotPassword = async (req, res) => {
         .json({ message: "No account found with this email address." });
     }
 
-    // Generate 6-Digit OTP Code
+    // Generate 6-Digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+    const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Save OTP to DB
     user.resetOtp = otp;
     user.resetOtpExpire = otpExpire;
     await user.save();
-    console.log(`🔢 [FORGOT PASSWORD] Generated OTP for ${cleanEmail}: ${otp}`);
 
-    // Render-optimized Transport with strict Timeouts and Port 587
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false, // Port 587 uses STARTTLS
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // Google 16-character App Password
-      },
-      connectionTimeout: 10000, // Connection limit to prevent hanging (10s)
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-      tls: {
-        rejectUnauthorized: false, // Prevents SSL Handshake block on Cloud IPs
-      },
-    });
+    console.log(`🔢 [FORGOT PASSWORD] OTP generated for ${cleanEmail}`);
+
+    const transporter = createTransporter();
 
     const mailOptions = {
       from: `"Walletly Security" <${process.env.EMAIL_USER}>`,
@@ -239,21 +252,29 @@ export const forgotPassword = async (req, res) => {
       `,
     };
 
-    console.log("📧 Attempting to send OTP email via Nodemailer...");
-    
-    // Explicit AWAIT with strict error boundary
+    console.log("📧 Attempting to send OTP email via Nodemailer (Render)...");
+
     const info = await transporter.sendMail(mailOptions);
-    console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY]:", info.response);
+    console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY]:", info.response || info.messageId);
 
     return res.status(200).json({
       message: "A 6-digit OTP code has been sent to your email!",
     });
-
   } catch (error) {
     console.error("❌ [NODEMAILER/SERVER ERROR]:", error.message || error);
-    return res.status(500).json({
-      message: error.message || "Failed to send OTP email.",
-    });
+
+    // Better user-friendly messages
+    let message = "Failed to send OTP email. Please try again later.";
+
+    if (error.message?.includes("Invalid login") || error.message?.includes("Username and Password not accepted")) {
+      message = "Email service authentication failed. Please check App Password.";
+    } else if (error.message?.includes("timeout") || error.message?.includes("Connection timeout")) {
+      message = "Email server connection timed out. Please try again in a moment.";
+    } else if (error.code === "ECONNECTION" || error.code === "ETIMEDOUT") {
+      message = "Could not connect to email server. Please try again.";
+    }
+
+    return res.status(500).json({ message });
   }
 };
 
@@ -261,10 +282,10 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   console.log("==================================================");
   console.log("🔄 [RESET PASSWORD] Process started...");
-  console.log("📥 [RESET PASSWORD] Body received:", { 
-    email: req.body?.email, 
-    otp: req.body?.otp, 
-    newPassword: "***" 
+  console.log("📥 [RESET PASSWORD] Body received:", {
+    email: req.body?.email,
+    otp: req.body?.otp,
+    newPassword: "***",
   });
 
   try {
@@ -296,15 +317,16 @@ export const resetPassword = async (req, res) => {
         .json({ message: "User not found with this email" });
     }
 
-    console.log("🔍 [RESET PASSWORD] DB Reset OTP:", user.resetOtp, "VS Entered OTP:", cleanOtp);
+    console.log("🔍 [RESET PASSWORD] Checking OTP...");
 
     if (!user.resetOtp || user.resetOtp.toString().trim() !== cleanOtp) {
       console.log("⚠️ [RESET PASSWORD] OTP Mismatch");
       return res.status(400).json({ message: "Invalid OTP code" });
     }
 
-    const isExpired = !user.resetOtpExpire || Date.now() > new Date(user.resetOtpExpire).getTime();
-    console.log("⏱️ [RESET PASSWORD] OTP Expired Status:", isExpired);
+    const isExpired =
+      !user.resetOtpExpire ||
+      Date.now() > new Date(user.resetOtpExpire).getTime();
 
     if (isExpired) {
       console.log("⚠️ [RESET PASSWORD] OTP Has Expired");
