@@ -168,35 +168,26 @@ export const uploadProfilePicture = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-// 5. Forgot Password (Nodemailer 6-Digit OTP Generator)
+// 5. Forgot Password (Nodemailer 6-Digit OTP Generator - FIXED)
 export const forgotPassword = async (req, res) => {
   console.log("==================================================");
   console.log("📩 [FORGOT PASSWORD - NODEMAILER OTP] Process started...");
-  console.log("📥 [FORGOT PASSWORD] Raw Body:", req.body);
 
   try {
     const { email } = req.body;
     const cleanEmail = email ? email.toString().trim().toLowerCase() : "";
 
-    console.log("🔍 [FORGOT PASSWORD] Cleaned Email:", cleanEmail);
-
     if (!cleanEmail) {
-      console.log("⚠️ [FORGOT PASSWORD] Email is empty or undefined");
       return res.status(400).json({ message: "Email is required" });
     }
 
-    console.log("🔎 [FORGOT PASSWORD] Searching user in MongoDB...");
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      console.log(`⚠️ [FORGOT PASSWORD] No user found in Database for: "${cleanEmail}"`);
       return res
         .status(404)
         .json({ message: "No account found with this email address." });
     }
-
-    console.log(`✅ [FORGOT PASSWORD] User found: ${user.name} (${user._id})`);
 
     // Generate 6-Digit OTP Code
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -208,18 +199,13 @@ export const forgotPassword = async (req, res) => {
     await user.save();
     console.log(`🔢 [FORGOT PASSWORD] Generated OTP for ${cleanEmail}: ${otp}`);
 
-    // Render-Friendly Secure Transporter:
+    // Transporter Configuration
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true, // Port 465 ke liye true hona zaroori hai
+      service: 'gmail', // Native Gmail integration use karein
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        pass: process.env.EMAIL_PASS, // Standard Password NOHI! App Password zaroori hai.
       },
-      tls: {
-        rejectUnauthorized: false // SSL Handshake Block hone se bachata hai
-      }
     });
 
     const mailOptions = {
@@ -244,25 +230,23 @@ export const forgotPassword = async (req, res) => {
       `,
     };
 
-    console.log("📧 Sending OTP email via Nodemailer in background...");
+    console.log("📧 Attempting to send OTP email via Nodemailer...");
     
-    // Non-blocking dispatch to avoid timeouts
-    transporter.sendMail(mailOptions)
-      .then(() => console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY TO]:", cleanEmail))
-      .catch((err) => console.error("❌ [NODEMAILER ERROR]:", err.message));
+    // AWAIT use karein taake actual error log ho sake!
+    const info = await transporter.sendMail(mailOptions);
+    console.log("🎉 [OTP EMAIL SENT SUCCESSFULLY]:", info.response);
 
-    // Return response instantly
     return res.status(200).json({
       message: "A 6-digit OTP code has been sent to your email!",
     });
+
   } catch (error) {
-    console.error("❌ [FORGOT PASSWORD ERROR]:", error.message);
+    console.error("❌ [NODEMAILER/SERVER ERROR]:", error);
     return res.status(500).json({
       message: error.message || "Failed to send OTP email.",
     });
   }
 };
-
 // 6. Reset Password
 export const resetPassword = async (req, res) => {
   console.log("==================================================");
