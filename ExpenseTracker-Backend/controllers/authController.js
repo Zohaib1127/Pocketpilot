@@ -190,19 +190,6 @@ export const forgotPassword = async (req, res) => {
         .json({ message: "No account found with this email address." });
     }
 
-    // 🔑 STEP 0: Make sure the mail credentials actually exist before doing anything else.
-    // Most "email not sending" bugs are simply EMAIL_USER / EMAIL_PASS being
-    // missing, undefined, or the wrong kind of password (see notes below).
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.error(
-        "❌ [FORGOT PASSWORD] EMAIL_USER or EMAIL_PASS is missing from environment variables!"
-      );
-      return res.status(500).json({
-        message:
-          "Email service is not configured on the server. Contact support.",
-      });
-    }
-
     // Generate 6-Digit OTP Code
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
@@ -213,32 +200,22 @@ export const forgotPassword = async (req, res) => {
     await user.save();
     console.log(`🔢 [FORGOT PASSWORD] Generated OTP for ${cleanEmail}: ${otp}`);
 
-    // ✅ Use Nodemailer's built-in "service: gmail" shortcut instead of manually
-    // setting host/port. It auto-resolves the correct host, port and secure
-    // flag, and is far less likely to silently hang than a hand-rolled config.
+    // Render-optimized Transport with strict Timeouts and Port 587
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false, // Port 587 uses STARTTLS
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // ⚠️ Must be a 16-char Gmail App Password, NOT your normal Gmail password
+        pass: process.env.EMAIL_PASS, // Google 16-character App Password
       },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
+      connectionTimeout: 10000, // Connection limit to prevent hanging (10s)
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
+      tls: {
+        rejectUnauthorized: false, // Prevents SSL Handshake block on Cloud IPs
+      },
     });
-
-    // ✅ Verify the SMTP connection/credentials BEFORE attempting to send.
-    // This turns a silent timeout/hang into a clear, loggable error.
-    try {
-      await transporter.verify();
-      console.log("✅ [NODEMAILER] SMTP connection verified successfully");
-    } catch (verifyError) {
-      console.error("❌ [NODEMAILER VERIFY FAILED]:", verifyError.message);
-      return res.status(500).json({
-        message:
-          "Could not connect to the email server. Check EMAIL_USER/EMAIL_PASS (must be a Gmail App Password) and that outbound SMTP is not blocked by your host.",
-      });
-    }
 
     const mailOptions = {
       from: `"Walletly Security" <${process.env.EMAIL_USER}>`,
@@ -273,15 +250,7 @@ export const forgotPassword = async (req, res) => {
     });
 
   } catch (error) {
-    // Log the full error object (code, command, response) — "error.message"
-    // alone often hides the real SMTP-level reason (auth failure, blocked
-    // port, etc.) that tells you WHY the email isn't sending.
-    console.error("❌ [NODEMAILER/SERVER ERROR]:", {
-      message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-    });
+    console.error("❌ [NODEMAILER/SERVER ERROR]:", error.message || error);
     return res.status(500).json({
       message: error.message || "Failed to send OTP email.",
     });
